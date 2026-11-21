@@ -1,0 +1,179 @@
+/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点不再逐条写)
+ *  @note 必须定在 `#include "log_api.h"` 之前。 */
+#define LOG_TAG "init"
+
+#include "init_thread.h"
+#include "protocol_parser_thread.h"
+#include "app_config.h"
+#include "boot_stage.h" /* 启动阶段日志: 本次改造的主线 */
+#include "bsp_uart.h"
+#include "log_init.h"   /* 日志子系统装配 (第 3 步) */
+#include "shell_init.h" /* shell 子系统装配 (最后一步) */
+#include "protocol_chain_init.h"
+#include "file_storage_init.h"
+#include "param_manager_init.h"
+#include "port.h"
+#include "log_api.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
+
+/* ── 相机 / VSC 管线（本次移植不参与编译，头文件保留以便后续接回） ──
+ * 注意：这些头只提供声明，对应的 .c 目前在 .cproject 里被排除，
+ * 因此下面所有相机调用都保持注释状态，否则会链接失败。 */
+#include "vsc_lite.h"
+#include "crop_vsc.h"
+#include "binning_vsc.h"
+#include "decoder_vsc.h"
+#include "histogram_vsc.h"
+#include "sensor_vsc.h"
+#include "sensor_imx296_vsc.h"
+#include "vsc_lite_board.h"
+
+#include <string.h>
+
+/*
+ * 协议解析任务的栈与 TCB 改为**动态**分配（xTaskCreate），栈来自 FreeRTOS 堆
+ * (heap_4)，不再占 .bss。
+ *
+ * 带价：这个任务是常驻的（for(;;) 不退出），所以它的 4KB 会**永久**占着堆，
+ * 不像 init 任务那样退出即归还；而且堆不像静态数组那样能在 map 里逐项核对。
+ * 换来的好处是 .bss 缩 4KB，静态占用与运行期占用能分开看。
+ *
+ * 后果是启动峰值堆要装得下两个任务：
+ *   init 4096（瞬态）+ parser 4096（常驻）+ defaultTask 512（CubeMX 生成）
+ *   + 串口 StreamBuffer 2049 + 互斥锁 ~1500  ≈ 12.3KB / 16384
+ * init 自删后回落到 ≈8.2KB。若后续再加任务/StreamBuffer，先看 heap 余量
+ * （可在 shell 里跑 `ps` 看各任务栈高水位）。
+ *
+ * @note 栈深度用 APP_STACK_WORDS() 把 STACK_SIZE（字节，沿用 Zephyr 语义）
+ *       换成字。
+ */
+
+app_ctx_t app_ctx;
+
+extern void app_sensor_demo(void);
+
+void init_thread_entry(void *arg)
+{
+    (void)arg;
+
+    app_ctx_t *ctx = &app_ctx;
+
+    memset(ctx, 0, sizeof(app_ctx_t));
+
+    /* ================================================================
+     *  装配顺序表 (改顺序前请逐条确认)
+     *
+     *  1. 平台互斥锁 —— param/file/vfs 的 system_lock(id) 依赖它;
+     *  2. 串口就绪   —— log/shell 的字节出口指向这个口, 中断也开始往缓冲灌字节;
+     *  3. 日志       —— 必须早于后面任何 LOG_*, 也是第 1~2 步暂存行的补打点;
+     *  4. 协议链     —— 建链 + 挂 ymodem/imperx/camyu (内部会打日志);
+     *  5. 存储挂载   —— littlefs 可用之后参数才能读旧值;
+     *  6. 参数初始化 —— 读参数缓存/备份分区 (shell 的 ft 命令依赖参数);
+     *  7. 协议解析线程 —— 它消费第 2 步开始灌入缓冲的字节。
+     *
+     *                          ── 到这里启动完成 ──
+     *
+     *  8. shell      —— **最后一步, 且不计入上面的 7 步**。
+     *                   它的字节入口就是第 7 步那个解析任务 (纯推送模型,
+     *                   shell 自己不 read), 所以提前初始化并不会让它提前可用;
+     *                   放到后面才能让提示符出现在启动主线之后, 并且保证敲命令
+     *                   时 fs / param 都已就绪。详见 shell_init.h。
+     *
+     *  失败路径: 任何一步失败都不再回滚日志 (它是唯一的报告通道), 但会拆掉
+     *  已挂上的协议链 —— 只有它持有解析器实例与串口出口。
+     * ================================================================ */
+
+    /* 1) 平台互斥锁 */
+    system_mutex_init();
+    boot_stage(BOOT_STEP_LOCKS, "sys: %d system mutexes ready",
+               (int)SYS_LOCK_COUNT);
+
+    /* 2) 串口通道。失败就没必要往下走 —— 没有出口可报错。
+          波特率**不在这里设** —— 它由 CubeMX 在 `MX_USART3_UART_Init()` 里配
+          (`.ioc` 的 USART3 页, 460800), 是唯一来源。本步只"开通道":
+          建 StreamBuffer + 武装接收。
+          运行时若要改速, 用 bsp_uart_set_baudrate() 单独调, 不必重启通道。 */
+    if (bsp_uart_start() != 0)
+    {
+        /* 这一行是**裸写**: 日志在第 3 步才起来, 此处 LOG_* 会被静默丢弃。
+           原先这里是静默 goto, 串口起不来时现场完全看不到原因。 */
+        boot_stage_bare("[boot] uart channel start failed (bsp_uart_start)\r\n");
+        goto exit_task;
+    }
+    boot_stage(BOOT_STEP_UART, "uart: comm/dbg channel open");
+
+    /* 3) 日志子系统 (同时补打第 1~2 步暂存的启动行) */
+    if (!log_boot_init())
+    {
+        /* 此时已无任何日志通道可选, log_boot_init 已裸写报过一句 */
+        goto exit_task;
+    }
+
+    /* 4) 协议链 (内部逐条报告: ymodem / imperx / camyu) */
+    if (!protocol_chain_init(ctx))
+    {
+        goto exit_task;
+    }
+
+    /* 5) 存储挂载 (内部逐卷报告: /lfs、/raw 及跳过项) */
+    if (!file_storage_init(ctx))
+    {
+        goto fail_fp;
+    }
+
+    /* 6) 参数加载/初始化 */
+    param_manager_init();
+
+    /* ── VSC Lite pipeline（相机子系统本次不参与编译，保持注释） ──
+    vsc_lite_pipeline_t isp_pipe;
+    int rc = vsc_lite_pipeline_init(&isp_pipe, vsc_lite_board_stages,
+                                    vsc_lite_board_num_stages);
+    if (rc != VSC_OK) {
+        LOG_E("VSC Lite pipeline init failed: %d", rc);
+    }
+    */
+
+    /* 7) 协议解析任务 —— 最后一个起来，它消费第 2 步开始灌入的字节。
+          动态分配（与 init 任务一致）：栈与 TCB 来自 FreeRTOS 堆，不占 .bss。
+          创建失败通常是堆不足 —— 打日志而不静默继续，否则系统“跑着但不收数据”。 */
+    if (xTaskCreate(protocol_parser_thread_entry, "proto",
+                    APP_STACK_WORDS(STACK_SIZE), NULL,
+                    (UBaseType_t)THREAD_PRIORITY, NULL) != pdPASS)
+    {
+        boot_stage_fail(BOOT_STEP_TASK,
+                        "task: protocol parser create failed (heap too small?)");
+    }
+    else
+    {
+        boot_stage(BOOT_STEP_TASK, "task: protocol parser started (prio %u, stack %u B)",
+                   (unsigned)THREAD_PRIORITY, (unsigned)STACK_SIZE);
+    }
+
+    boot_stage_done();
+
+    /* 操作提示 —— 注意这不是“状态回显” (状态由上面各步骤自己报告)。
+       原先这里是 7 行硬编码的 "Imperx: ready / File io: LittleFS(file_io_fs)",
+       它不看任何真实返回值, 即使挂载失败也照打。只保留两个操作者真的会用到的
+       命令字 —— 进 shell 的 0xF003 不在这里重复, 下一行就写着。 */
+    boot_stage(0, "hint: ft recv <- Imperx WRITE 0xF000, ft send <- 0xF001");
+
+    /* 8) shell —— **启动顺序的最后一步**。
+          放在这里而不是早先的"诊断设施"里, 理由见 shell_init.h:
+          shell 是纯推送模型, 字节入口就是第 7 步刚起的解析任务, 提前初始化
+          并不会让它提前可用, 只会让提示符把启动日志切成两截。
+          shell 起不来不影响协议面 (已在内部报错), 所以不中断。 */
+    (void)shell_boot_init();
+
+    goto exit_task;
+
+fail_fp:
+    protocol_chain_cleanup(ctx);
+
+exit_task:
+    /* FreeRTOS 的任务函数**不允许 return**（会跳到非法地址）。
+       装配完成后本任务无事可做，自删除。这是与 Zephyr 版最重要的差异之一：
+       Zephyr 的线程 return 是合法的，直接翻译过来必现 HardFault。 */
+    vTaskDelete(NULL);
+}

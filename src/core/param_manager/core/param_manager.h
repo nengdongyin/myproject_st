@@ -1,0 +1,1627 @@
+#ifndef PARAM_MANAGER_H
+#define PARAM_MANAGER_H
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include "param_manager_config.h"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    /**
+     * @file param_manager.h
+     * @brief 嵌入式内存参数管理器 — 公共接口定义
+     *
+     * @par 架构总览
+     * 两级 vtable 多态 (OOP-in-C):
+     *   - 参数级 param_vtable_t: 每条参数条目携带 vtable 指针, 决定
+     *     读/写/持久化/重置等行为 (App 参数与 IP 参数两套实现);
+     *   - 模块级 param_module_vtable_t: 每个模块携带 vtable 指针,
+     *     决定标脏/flush/init/exec 等行为。
+     *
+     * @par 分层规则 (单一事实来源)
+     *   - 本文件: 共享类型、两级 vtable 结构、公共 API、*_ENTRY / *_CORE
+     *     核心宏 (以参数注入 App/IP 差异, 应用层勿直接使用);
+     *   - param_manager.c: 两级 vtable 的通用实现 (基类);
+     *   - app_param_manager.* / ip_param_manager.*: 各自子系统专属的
+     *     类型别名、包装宏、vtable 常量与差异实现 (派生)。
+     *   依赖方向为 派生 → 基类, 无反向。
+     *
+     * @par 关键设计点
+     *   - 参数条目静态定义, 零动态分配;
+     *   - 类型分派表 (g_param_data_ops / g_param_pre_write) 消除 switch-case;
+     *   - App 与 IP 模块共用统一结构体 param_module 与单条注册链表;
+     *   - 模块级 flush 顺序由 MODULE_INIT_ORDER (module_ids.h) 决定;
+     *   - 持久化经 param_storage_drv_t 后端抽象 (FlashDB / mkv / ini 等),
+     *     支持多分区与版本迁移。
+     *
+     * @par 常用 API 速查 (完整决策表见 docs/param-manager-guide.md)
+     *   - 启动:  param_boot_standard(&hooks)      一次调用完成 8 步
+     *   - 写入:  param_write(标准,越界拒绝) / param_write_cache(跳 apply,
+     *            回调内自修改用) / param_write_sync(立即校验/下发) /
+     *            param_write_raw(唯一带长度入口, BLOB/字节流) /
+     *            param_write_string(截断返回正码 PARAM_OK_TRUNCATED);
+     *            裁剪语义显式走 param_write_ex(..., PARAM_WR_CLAMP)
+     *   - 读取:  param_read(回调失败回退缓存) / param_read_cache(纯缓存) /
+     *            param_read_hw(只读权威源)
+     *   - 持久化: param_save_all / param_save_one / param_load_all / param_load_one
+     *   - 刷新:  param_flush         命令: param_exec
+     *   - 维护:  param_reapply(缓存重放) / param_validate_all(全量裁剪) /
+     *            param_set_range(动态范围)
+     *   - 注册:  PARAM_APP_MODULE_DEFINE / PARAM_IP_MODULE_DEFINE + PARAM_TABLE
+     *            + PARAM_MODULE_INIT;
+     *            ID/顺序登记见 module_ids.h 单一清单 (PARAM_MODULE_LIST)
+     *   - 排障:  param_strerror() / param_dump() / param_get_stats()
+     */
+
+/** @brief 构造 32 位参数 ID (高 16 位 module_id, 低 16 位 local_id) */
+#define MAKE_PARAM_ID(mod, loc) (uint32_t)((((mod) & 0xFFFFu) << 16) | ((loc) & 0xFFFFu))
+/** @brief 从 32 位 ID 提取模块 ID (高 16 位) */
+#define PARAM_MODULE_ID(id) (((id) >> 16) & 0xFFFFu)
+/** @brief 从 32 位 ID 提取本地 ID (低 16 位) */
+#define PARAM_LOCAL_ID(id) ((id) & 0xFFFFu)
+
+    /**
+     * @brief 参数值联合体
+     *
+     * 覆盖所有支持的参数类型。实际使用的成员由 param_type_t 决定。
+     *
+     * .ptr 成员承担多种语义 (按使用场景区分):
+     *   - BLOB  cache / default_val: 指向外部静态字节缓冲区
+     *   - STRING cache / default_val: 指向外部静态 char 缓冲区
+     *   - 写入传递: param_write_string / param_write_raw 通过 .ptr
+     *     向 cache_update_string / cache_update_blob 传递源数据指针
+     *   - EXEC 参数: param_exec / write_raw 通过 .ptr 传递 user_arg
+     *
+     * 值类型 (UINT/INT/FLOAT/BOOL/ENUM) 不使用 .ptr。
+     */
+    typedef union
+    {
+        uint32_t u32;
+        int32_t i32;
+        float f32;
+        bool b;
+        void *ptr;
+    } param_value_t;
+
+    /**
+     * @brief 参数类型枚举
+     */
+    typedef enum
+    {
+        PARAM_TYPE_UINT = 0,
+        PARAM_TYPE_INT = 1,
+        PARAM_TYPE_FLOAT = 2,
+        PARAM_TYPE_BOOL = 3,
+        PARAM_TYPE_ENUM = 4,
+        PARAM_TYPE_BLOB = 5,
+        PARAM_TYPE_STRING = 6,
+        PARAM_TYPE_EXEC = 7,
+        PARAM_TYPE_COUNT
+    } param_type_t;
+
+    /**
+     * @brief 参数属性标志位
+     *
+     * 可通过位或组合使用。
+     */
+    typedef enum
+    {
+        PARAM_FLAG_PERSIST = (1u << 0),    /**< 需要持久化到 Flash */
+        PARAM_FLAG_READONLY = (1u << 1),   /**< 只读，禁止写入 */
+        PARAM_FLAG_HIDDEN = (1u << 2),     /**< 对用户隐藏 */
+        PARAM_FLAG_DEPRECATED = (1u << 3), /**< 已废弃，保留兼容 */
+        PARAM_FLAG_EXEC = (1u << 4),       /**< exec 命令 (不可写入, 仅 param_exec 触发) */
+        /** 固定值参数: 仅允许写入定义时的固定值 (min==max==default),
+         *  其余值一律拒绝。用于"寄存器只支持单一取值"类参数的强制校验,
+         *  修复"min==max 时 has_range=0 导致零校验"的漏洞。 */
+        PARAM_FLAG_FIXED = (1u << 5),
+    } param_flag_t;
+
+    /**
+     * @brief 写策略旗标 (param_write_ex / param_write_bytes 用)
+     *
+     * 默认 (0) = 标准写入: apply 回调 + strict 校验 + 标脏等 flush。
+     */
+    typedef enum
+    {
+        PARAM_WR_CLAMP = (1u << 0), /**< 超范围值裁剪而非拒绝 (显式裁剪旗标,
+                                        仅 UINT/INT/FLOAT 生效) */
+    } param_write_flags_t;
+
+    /**
+     * @brief 函数返回状态码
+     *
+     * 所有公开 API 均返回 param_status_t 或其等价 int。
+     */
+    typedef enum
+    {
+        PARAM_OK = 0,                 /**< 操作成功 */
+        /** 操作成功但值被截断 (STRING 写入超 max_len)。
+         *  正码: ret < 0 的"失败判定"不受影响; 需要严格区分时用
+         *  ret == PARAM_OK, 成功类判定用 ret >= 0。 */
+        PARAM_OK_TRUNCATED = 1,
+        PARAM_ERR_INVALID_ID = -1,    /**< 无效的参数 ID */
+        PARAM_ERR_OUT_OF_RANGE = -2,  /**< 值超出合法范围 */
+        PARAM_ERR_READONLY = -3,      /**< 尝试写入只读参数 */
+        PARAM_ERR_TYPE_MISMATCH = -4, /**< 参数类型不匹配 */
+        PARAM_ERR_NOT_FOUND = -5,     /**< 模块/参数未找到 */
+        PARAM_ERR_FLASH_FAIL = -6,    /**< Flash 存储操作失败 */
+        PARAM_ERR_ALREADY_REG = -7,   /**< 模块或参数已注册 */
+        PARAM_ERR_NO_MEMORY = -8,     /**< 哈希表已满 */
+        PARAM_ERR_TIMEOUT = -9,       /**< 操作超时 */
+        PARAM_ERR_BUSY = -10,         /**< 系统忙，重复初始化 */
+        /** 当前配置/后端不具备该能力: 未编译持久化 (storage == NULL)、
+         *  或后端未提供所需回调 (load/save/delete/erase_all/分区)。
+         *  与 PARAM_ERR_NOT_FOUND("查不到实体") 区分: 本码表示"本固件不支持",
+         *  重试无意义; 通常由构建配置决定, 运行期不会自行恢复。 */
+        PARAM_ERR_NOT_SUPPORTED = -11,
+        /** 框架尚未初始化: param_init 未调用, 或已 param_deinit。
+         *  与 PARAM_ERR_NOT_FOUND ("ID/模块查不到") 区分: 本码与传入的 ID
+         *  无关, 任何调用在未初始化时都得到它; 唯一处理方式是先完成全局
+         *  初始化, 重复试当前调用无意义。 */
+        PARAM_ERR_NOT_INITIALIZED = -12,
+        /** 对命令型参数 (EXEC) 使用了普通写路径: 请改用 param_exec /
+         *  param_write_raw / param_write_sync 触发。与
+         *  PARAM_ERR_READONLY (禁止写入) 区分: 本码提示"入口用错了",
+         *  不是"参数不可写"。 */
+        PARAM_ERR_EXEC_ONLY = -13,
+    } param_status_t;
+
+    typedef struct param_module param_module_t;
+    typedef struct param_entry param_entry_t;
+
+    typedef struct param_module_node param_module_node_t;
+
+    /**
+     * @brief 参数变化通知回调
+     *
+     * 当参数值通过 param_write / param_write_cache / param_write_sync /
+     * param_write_raw / param_write_string / param_reapply
+     * 成功写入后调用。命令执行 (param_exec / EXEC 经 write_raw、
+     * write_sync 触发) 与单条加载/重置 (param_load_one /
+     * param_reset_one) 同样触发。回调在锁外执行;
+     * 回调内再次调用写入类 API 需由实现者自行处理防重入
+     * (框架不提供递归保护)。
+     *
+     * @attention new_value 取自写入后的参数缓存 (**生效值**), 不是调用者
+     *   传入的原始值: apply 回调的修正都已体现在其中 (超范围值在写入
+     *   路径即被拒绝)。BLOB/STRING 的 .ptr 指向框架缓存
+     *   缓冲区 (生命周期覆盖整个运行期), 而非调用者的临时缓冲区。
+     *   EXEC 命令触发的 notify 缓存不参与, new_value 携带命令负载
+     *   (与 exec 回调收到的 arg 形状一致)。
+     *
+     * @attention 多线程并发写入同一参数时，notify 可能收到中间值
+     *   (另一个线程在 notify 发出后立即覆盖了参数值)。
+     *   new_value 应视为 best-effort 快照，不应假设其与缓存当前值一致。
+     *
+     * @param param_id  发生变化的参数 ID
+     * @param new_value 写入后的生效值 (best-effort 快照)
+     */
+    typedef void (*param_notify_fn)(uint32_t param_id, param_value_t new_value);
+
+    /**
+     * @brief 模块参数读取回调 (App 与 IP 共用)
+     *
+     * 若提供且返回 PARAM_OK，框架回写缓存后返回。
+     * NULL 或返回错误 → 回退到读取缓存值。
+     *
+     * @attention 仅当确实从权威源 (硬件寄存器/实时数据) 取得有效值
+     *   时才允许返回 PARAM_OK: 框架对返回值无条件回写缓存,
+     *   返回 PARAM_OK 但 value 未填有效值将污染缓存并可能被持久化。
+     *   未取得权威值时必须返回错误, 框架会回退到缓存值。
+     *
+     * @param ctx      模块私有上下文
+     * @param param_id 参数 ID
+     * @param value    [out] 读到的值
+     * @return PARAM_OK 成功 (触发缓存回写)，其他值回退缓存
+     */
+    typedef int (*param_read_fn)(void *ctx, uint32_t param_id, param_value_t *value);
+
+    /**
+     * @brief 模块参数写入回调 (App 与 IP 共用)
+     *
+     * 回调语义随模块类型分派:
+     *   - App 模块: apply 校验/转换, 返回非 OK 拒绝写入;
+     *   - IP 模块:  向硬件下发新值。
+     *
+     * @attention 回调执行期间缓存已先行更新为新值 (含 BLOB/STRING):
+     *   回调内 param_read / param_save_one 均反映新值。
+     *   回调返回非 OK 时缓存**回滚到写入前的值**
+     *   ("返回错误 = 无任何变化")。
+     *
+     * @param param_id 参数 ID
+     * @param value    待写入的新值
+     * @return PARAM_OK 表示接受，其他值表示拒绝
+     */
+    typedef int (*param_write_fn)(void *ctx, uint32_t param_id, param_value_t value);
+
+    /**
+     * @brief App 模块 flush 回调 — 将缓存的参数批量写入硬件
+     *
+     * @note 回调在锁外执行, 回调内可安全调用 param_* API;
+     *   回调内对参数的重新写入会保留 dirty, 由下一轮 param_flush 处理。
+     * @param ctx 模块注册时提供的上下文指针
+     * @return PARAM_OK 成功
+     */
+    typedef int (*param_flush_fn)(void *ctx);
+
+    /**
+     * @brief App 模块初始化回调
+     * @param ctx 模块注册时提供的上下文指针
+     * @return PARAM_OK 成功
+     */
+    typedef int (*param_init_fn)(void *ctx);
+
+    /**
+     * @brief 模块命令执行回调
+     *
+     * 当 param_write / param_write_raw / param_write_sync 遇到 PARAM_FLAG_EXEC
+     * 参数时，框架自动路由到此回调。arg 为 param_value_t 联合体，可按需
+     * 取 .u32 / .i32 / .f32 / .b / .ptr。
+     *
+     * @par arg 形状 (按触发路径, 两种)
+     *   - param_exec(cmd_id, user_arg):   arg.ptr = user_arg  (指针)
+     *   - param_write_raw(id, data, len): arg.ptr = data      (指针)
+     *   - param_write_sync(id, value):    arg = value         (联合体值原样,
+     *     调用者传 .u32 即收到 .u32)。sync 的入参是无指针联合体,
+     *     无法也无须统一成指针形状 —— 指针源 (exec/raw) 与值源 (sync)
+     *     是两种天然入参形状。
+     * 驱动回调需同时处理两种形状 (按触发方约定取值); notify 的 new_value
+     * 与回调收到的 arg 形状一致)。
+     *
+     * @param ctx      模块私有上下文 (App: 业务实例 / IP: driver 数据)
+     * @param param_id 全局唯一参数 ID (MAKE_PARAM_ID 风格)
+     * @param arg      命令参数 (param_value_t 联合体)
+     * @return PARAM_OK 成功，其他值表示失败
+     */
+    typedef int (*param_exec_fn)(void *ctx, uint32_t param_id, param_value_t arg);
+
+    /**
+     * @brief 模块级虚函数表 (vtable)
+     *
+     * 每个模块类型 (App / IP) 提供一套实现，存于 .rodata。
+     * 通过模块级 vtable 统一处理 dirty 标记、flush、init 等操作。
+     */
+    typedef struct param_module_vtable
+    {
+        /** 将模块及其指定参数标记为 dirty */
+        void (*mark_dirty)(param_module_node_t *m, uint16_t local_id);
+        /** 清除模块内指定参数的 dirty 标记 */
+        void (*clear_dirty)(param_module_node_t *m, uint16_t local_id);
+        /** 将模块的所有 dirty 参数刷入硬件 */
+        int (*flush)(param_module_node_t *m);
+        /** 模块初始化 */
+        int (*init)(param_module_node_t *m);
+        /** 模块命令执行 */
+        int (*exec)(param_module_node_t *m, uint32_t cmd_id, param_value_t arg);
+        /** 模块重置 */
+        void (*reset)(param_module_node_t *m);
+        /** 模块去初始化 */
+        void (*deinit)(param_module_node_t *m);
+    } param_module_vtable_t;
+
+    /* 两级 vtable 的具体实例 (app_vtable / ip_vtable / app_module_vtable /
+       ip_module_vtable) 由派生侧头文件声明:
+         - app_param_manager.h → app_vtable / app_module_vtable
+         - ip_param_manager.h  → ip_vtable  / ip_module_vtable
+       基类头文件只命名基类符号 (依赖方向: 派生 → 基类, 无反向)。 */
+
+    /**
+     * @brief 参数级虚函数表 (vtable)
+     *
+     * 全系统仅 2 份实例 (app_vtable / ip_vtable)，存于 .rodata。
+     * 所有参数操作 (读/写/立即写/原始写/flush/存/取/重置) 均通过此表分派。
+     *
+     * module_vtable 由各子系统在组装本表时填入 (App→&app_module_vtable,
+     * IP→&ip_module_vtable): 基类实现据此校验"参数条目 ↔ 所属模块"的类型
+     * 一致性, 从而基类代码无需也不得命名任何派生侧的 vtable 符号
+     * (依赖方向: 派生 → 基类, 无反向)。
+     */
+    typedef struct param_vtable
+    {
+        /** 读取参数的当前缓存值 */
+        int (*read)(param_entry_t *e, param_value_t *value);
+        /** 写入参数缓存 (不立即刷硬件) */
+        int (*write)(param_entry_t *e, param_value_t value);
+        /** 写入参数缓存:
+         *   - App 参数: 跳过 apply 回调，仅更新缓存 + 标记 dirty
+         *   - IP 参数:  与 write 行为相同 (IP 无 apply 回调) */
+        int (*write_cache)(param_entry_t *e, param_value_t value);
+        /** 同步写入参数槽位:
+         *   - App 槽位 (param_entry_write_sync_apply): apply 校验 + 标脏,
+         *     硬件仍由 param_flush 下发 (sync = 同步校验, 不承诺硬件);
+         *   - IP 槽位 (param_entry_write_sync): write 回调直通硬件 + 清脏。
+         *   EXEC 参数两侧均路由到 exec。详见 param_write_sync。 */
+        int (*write_sync)(param_entry_t *e, param_value_t value);
+        /** 原始字节流写入 */
+        int (*write_raw)(param_entry_t *e, const uint8_t *data, uint16_t len);
+        /** 将参数持久化到 Flash */
+        int (*save)(param_entry_t *e);
+        /** 从 Flash 恢复参数 (返回 param_status_t: PARAM_OK = 已恢复或无该键,
+         *  负值 = 错误; 不返回字节数 —— 那是后端层 load 的契约) */
+        int (*load)(param_entry_t *e);
+        /** 重置参数为默认值 */
+        int (*reset)(param_entry_t *e);
+        /** 与本参数级 vtable 配对的模块级 vtable (条目↔模块类型一致性校验用) */
+        const param_module_vtable_t *module_vtable;
+    } param_vtable_t;
+
+    /* app_vtable / ip_vtable 的声明见派生侧头文件
+       (app_param_manager.h / ip_param_manager.h)。 */
+
+    /**
+     * @brief 参数基类 (平台相关: 32-bit 上 8 字节, 64-bit 上 16 字节)
+     *
+     * 所有参数条目均以此结构体开头，通过 vtable 指针实现多态分派。
+     */
+    struct param_entry
+    {
+        uint32_t param_id;            /**< 由 MAKE_PARAM_ID 生成的全局唯一 ID */
+        const param_vtable_t *vtable; /**< 指向参数级 vtable */
+    };
+
+/**
+ * @brief 公共头部宏 — 所有派生参数结构体的统一前缀 (框架内部)
+ *
+ * 展开为 param_entry_t base + type (1B) + flags (2B) + dirty (1B)
+ *         + param_value_t cache + param_value_t default_val
+ *         (平台相关: 32-bit 约 20B, 64-bit 约 36B, 不含对齐填充)。
+ * 启用 PARAM_DEBUG_NAME_ENABLE 后额外增加 const char *name 字段。
+ *
+ * 此宏是 6 个派生结构体 (param_range_entry_t / param_enum_entry_t /
+ * param_bool_entry_t / param_exec_entry_t / param_blob_entry_t /
+ * param_string_entry_t) 及 param_entry_head_t 的**唯一布局来源**。
+ * 修改此宏即可同步更新所有派生结构体，避免手动维护 7 处重复字段。
+ *
+ * @warning 应用层代码严禁直接使用此宏。请使用 PARAM_UINT /
+ *          PARAM_INT / PARAM_IP_UINT 等类型化定义宏。
+ */
+#define PARAM_ENTRY_HEAD()     \
+    param_entry_t base;        \
+    uint16_t flags;            \
+    uint8_t type;              \
+    uint8_t dirty;             \
+    param_value_t cache;       \
+    param_value_t default_val; \
+    IF_PARAM_DEBUG_NAME(const char *name)
+
+#if PARAM_DEBUG_NAME_ENABLE
+#define IF_PARAM_DEBUG_NAME(x) x
+#define PARAM_DEBUG_NAME_INIT(nm) .name = #nm,
+#else
+#define IF_PARAM_DEBUG_NAME(x)
+#define PARAM_DEBUG_NAME_INIT(nm)
+#endif
+
+    /**
+     * @brief 数值范围型参数 (UINT / INT / FLOAT)
+     */
+    typedef struct
+    {
+        PARAM_ENTRY_HEAD();
+        uint8_t has_range; /**< 是否启用范围校验 */
+        param_value_t min; /**< 最小值 */
+        param_value_t max; /**< 最大值 */
+    } param_range_entry_t;
+
+    /**
+     * @brief 枚举型参数
+     */
+    typedef struct
+    {
+        PARAM_ENTRY_HEAD();
+        const int32_t *enum_values; /**< 允许的值列表 */
+        uint16_t enum_count;        /**< 列表中值的数量 */
+    } param_enum_entry_t;
+
+    /**
+     * @brief 布尔型参数
+     */
+    typedef struct
+    {
+        PARAM_ENTRY_HEAD();
+    } param_bool_entry_t;
+
+    /**
+     * @brief 命令型参数 (EXEC)
+     *
+     * 仅通过 PARAM_FLAG_EXEC 标记注册，不可通过 param_write 写入。
+     * 由 param_exec / param_write_raw / param_write_sync 路由到 exec。
+     */
+    typedef struct
+    {
+        PARAM_ENTRY_HEAD();
+    } param_exec_entry_t;
+
+    /**
+     * @brief 二进制大对象 (Blob) 参数
+     *
+     * cache.ptr 指向外部静态缓冲区，框架不管理内存。
+     * 调用者必须确保 buf 的生命周期覆盖参数使用期间。
+     */
+    typedef struct
+    {
+        PARAM_ENTRY_HEAD();
+        uint16_t blob_size; /**< Blob 的字节长度 */
+    } param_blob_entry_t;
+
+    /**
+     * @brief 字符串型参数 (BLOB 语义特化)
+     *
+     * cache.ptr 指向外部静态 char 缓冲区 (长度 = max_len + 1)。
+     * 写入时自动 strncpy 并保证末尾 '\\0'。dump 输出为可读文本。
+     * 调用者必须确保 buf 的生命周期覆盖参数使用期间。
+     */
+    typedef struct
+    {
+        PARAM_ENTRY_HEAD();
+        uint16_t max_len; /**< 最大字符数 (不含结尾 '\\0') */
+    } param_string_entry_t;
+
+/**
+ * @name 参数条目定义核心宏 (框架内部)
+ *
+ * App / IP 两套公开宏 (PARAM_UINT / PARAM_IP_UINT 等) 的共享初始化器。
+ * 唯一差异 (行为决定者) 为 vtable 指针，由调用方通过 _vtbl 传入:
+ *   App → &app_vtable, IP → &ip_vtable
+ *
+ * @note 应用层代码严禁直接使用本组宏。请使用 PARAM_UINT /
+ *       PARAM_IP_UINT 等类型化公开宏。
+ * @{
+ */
+
+/** @brief 数值范围型核心宏 (UINT) */
+#define PARAM_ENTRY_RANGE_UINT(_vtbl, _name, _id, _flags, _def, _min, _max) \
+    static param_range_entry_t _name = {                                    \
+        .base = {(_id), (_vtbl)},                                           \
+        .type = PARAM_TYPE_UINT,                                            \
+        .flags = (_flags),                                                  \
+        .dirty = 0,                                                         \
+        .has_range = ((_min) < (_max)),                                     \
+        .cache = {.u32 = (_def)},                                           \
+        .default_val = {.u32 = (_def)},                                     \
+        .min = {.u32 = (_min)},                                             \
+        .max = {.u32 = (_max)},                                             \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/** @brief 数值范围型核心宏 (INT) */
+#define PARAM_ENTRY_RANGE_INT(_vtbl, _name, _id, _flags, _def, _min, _max) \
+    static param_range_entry_t _name = {                                   \
+        .base = {(_id), (_vtbl)},                                          \
+        .type = PARAM_TYPE_INT,                                            \
+        .flags = (_flags),                                                 \
+        .dirty = 0,                                                        \
+        .has_range = ((_min) < (_max)),                                    \
+        .cache = {.i32 = (_def)},                                          \
+        .default_val = {.i32 = (_def)},                                    \
+        .min = {.i32 = (_min)},                                            \
+        .max = {.i32 = (_max)},                                            \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/** @brief 数值范围型核心宏 (FLOAT) */
+#define PARAM_ENTRY_RANGE_FLOAT(_vtbl, _name, _id, _flags, _def, _min, _max) \
+    static param_range_entry_t _name = {                                     \
+        .base = {(_id), (_vtbl)},                                            \
+        .type = PARAM_TYPE_FLOAT,                                            \
+        .flags = (_flags),                                                   \
+        .dirty = 0,                                                          \
+        .has_range = ((_min) < (_max)),                                      \
+        .cache = {.f32 = (_def)},                                            \
+        .default_val = {.f32 = (_def)},                                      \
+        .min = {.f32 = (_min)},                                              \
+        .max = {.f32 = (_max)},                                              \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/** @brief 枚举型核心宏 */
+#define PARAM_ENTRY_ENUM(_vtbl, _name, _id, _flags, _def, _vals, _cnt) \
+    static param_enum_entry_t _name = {                                \
+        .base = {(_id), (_vtbl)},                                      \
+        .type = PARAM_TYPE_ENUM,                                       \
+        .flags = (_flags),                                             \
+        .dirty = 0,                                                    \
+        .cache = {.i32 = (_def)},                                      \
+        .default_val = {.i32 = (_def)},                                \
+        .enum_values = (_vals),                                        \
+        .enum_count = (_cnt),                                          \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/** @brief 布尔型核心宏 */
+#define PARAM_ENTRY_BOOL(_vtbl, _name, _id, _flags, _def) \
+    static param_bool_entry_t _name = {                  \
+        .base = {(_id), (_vtbl)},                        \
+        .type = PARAM_TYPE_BOOL,                         \
+        .flags = (_flags),                               \
+        .dirty = 0,                                      \
+        .cache = {.b = (_def)},                          \
+        .default_val = {.b = (_def)},                    \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/**
+ * @brief BLOB 型核心宏
+ *
+ * @attention cache 与 default_val 共享 _def_ptr 指向的同一缓冲区
+ *   (单缓冲配置): reset 不恢复默认内容 (自拷贝被跳过)。框架有意
+ *   不提供双缓冲默认值方案 — BLOB 通常体积较大, 双备份的存储
+ *   收益有限。
+ */
+#define PARAM_ENTRY_BLOB(_vtbl, _name, _id, _flags, _def_ptr, _size) \
+    static param_blob_entry_t _name = {                              \
+        .base = {(_id), (_vtbl)},                                    \
+        .type = PARAM_TYPE_BLOB,                                     \
+        .flags = (_flags),                                           \
+        .dirty = 0,                                                  \
+        .cache = {.ptr = (_def_ptr)},                                \
+        .default_val = {.ptr = (_def_ptr)},                          \
+        .blob_size = (_size),                                        \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/**
+ * @brief STRING 型核心宏 (缓存指向调用方可写静态缓冲区, 长 max_len+1)
+ *
+ * @attention cache 与 default_val 共享同一指针 (单缓冲配置):
+ *   - 调用方必须传入可写静态缓冲区, 严禁字符串字面量 (.rodata
+ *     写入触发写保护故障);
+ *   - reset 无法恢复默认 (自拷贝被跳过)。
+ */
+#define PARAM_ENTRY_STRING(_vtbl, _name, _id, _flags, _def_ptr, _max_len) \
+    static param_string_entry_t _name = {                                \
+        .base = {(_id), (_vtbl)},                                        \
+        .type = PARAM_TYPE_STRING,                                       \
+        .flags = (_flags),                                               \
+        .dirty = 0,                                                      \
+        .cache = {.ptr = (_def_ptr)},                                    \
+        .default_val = {.ptr = (_def_ptr)},                              \
+        .max_len = (_max_len),                                           \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/** @brief EXEC 命令型核心宏 */
+#define PARAM_ENTRY_EXEC(_vtbl, _name, _id) \
+    static param_exec_entry_t _name = {     \
+        .base = {(_id), (_vtbl)},           \
+        .type = PARAM_TYPE_EXEC,            \
+        .flags = PARAM_FLAG_EXEC,           \
+        .dirty = 0,                         \
+        .cache = {.u32 = 0},                \
+        .default_val = {.u32 = 0},          \
+        PARAM_DEBUG_NAME_INIT(_name)}
+
+/** @} */
+
+    /**
+     * @brief 批量恢复输出端口 — 框架注入给 load_all 的数据出口
+     *
+     * load_all 的职责是"把存储里的记录逐条推给框架", 而不是自己找缓存、
+     * 自己遍历: 后端只见到本结构体, 不需要认识 param_cache_restore /
+     * param_entry_t / 框架内部头文件 (依赖方向: 后端 → 本端口 → 框架)。
+     *
+     * @note 框架在 SYS_LOCK_PARAM **之外**把 sink 交给后端 (整段存储扫描
+     *       不在临界区内); 每条记录提交时由 restore 的实现方 (框架侧)
+     *       自行加锁。后端只负责逐条推送, 不需要也不得为它加锁。
+     */
+    typedef struct param_restore_sink
+    {
+        /** @brief 框架私有上下文, 后端不得解读, 仅原样回传给 restore */
+        void *ctx;
+        /** @brief 提交一条记录到框架缓存
+         *
+         *  @param ctx  框架私有上下文 (本结构体的 ctx 字段)
+         *  @param id   参数 ID
+         *  @param data 值数据 (NULL 或 len==0 表示墓碑/删除 → 恢复为默认值)
+         *  @param len  数据长度
+         *  @return PARAM_OK               已提交
+         *          PARAM_ERR_NOT_FOUND    该 ID 未注册 (旧固件遗留记录, 可忽略)
+         *          PARAM_ERR_OUT_OF_RANGE 记录长度与条目容量不符 (数据损坏)
+         *          其他负值               提交失败
+         *  @note 单条被拒不中断扫描: 后端只需计数, 最终以 load_all 的返回值
+         *        (>0) 让框架回退逐条 load。 */
+        int (*restore)(void *ctx, uint32_t id, const uint8_t *data, uint16_t len);
+    } param_restore_sink_t;
+
+    /**
+     * @brief 持久化后端驱动接口
+     *
+     * 移植到新平台时，实现本接口的所有函数即可接入存储层。
+     * FlashDB、LittleFS、裸 NAND 均可通过本接口适配。
+     *
+     * @par 依赖规则
+     * 后端只依赖本结构体、param_restore_sink_t 与各后端自己的介质库
+     * (mkv / iniparser / flashdb / fal)。需要框架的数据时, 由框架经回调
+     * 参数或端口推给后端 (见 load_all 的 sink、save_begin/commit)。
+     *
+     * **不得**为"遍历条目 / 恢复缓存"而包含 param_manager_internal.h 或
+     * 调用 param_foreach、param_cache_restore、条目 vtable —— 那是控制流
+     * 反转 (后端指挥框架), 会与框架的锁域冲突。允许的例外只有"单条只读
+     * 元数据", 目前见 iniparser 后端的两处:
+     *   - param_entry_name: 值里的人类可读名称标注 (纯装饰, 不参与身份);
+     *   - param_entry_find + entry_type: 保存时按类型选落盘文本形态
+     *     (uint/float/string..., 类型只有条目自己知道)。
+     * 二者都只读单条、不回调、不改缓存, 因此不构成控制流反转。
+     *
+     * ctx 指针使同一套回调函数支持多个物理存储实例
+     * (如多分区/Bank 切换)，每个实例传入不同的 ctx 即可。
+     */
+    typedef struct param_storage_drv
+    {
+        void *ctx; /**< 实例上下文 (传递给所有回调) */
+        /** 加载指定参数的数据。
+         *
+         *  @param ctx      实例上下文
+         *  @param param_id 参数 ID
+         *  @param data     目标缓冲区 (非 NULL)
+         *  @param len      目标缓冲区容量 (>= 1)
+         *  @param read_len [out] 实际写入 data 的字节数 (<= len), 可传 NULL。
+         *                  短记录 (read_len < len) 由调用方按需补零。
+         *  @return PARAM_OK               记录存在, 已拷入 data
+         *          PARAM_ERR_NOT_FOUND    键不存在/已删除 → 框架保持默认值 (非错误)
+         *          PARAM_ERR_OUT_OF_RANGE 存储记录长度超出 len (格式变更/数据损坏)
+         *          其他负值               读取失败, 错误码上抛到 param_load_all
+         *
+         *  @note 状态与长度分离: 返回值只承载"存在/不存在/失败"三态, 长度经
+         *        read_len 出参传递 (适配层需要它给短记录补零)。三态必须彼此
+         *        可分 —— 若用"返回字节数"编码 (0 = 不存在, 负值 = 失败), 后端
+         *        无法为不同失败原因产生不同的负值, 真实读失败与数据损坏就会被
+         *        当成"键不存在"静默吞掉。
+         *  @note 无法取得记录原始长度的后端 (如 mkv_get 内部按 max_len 截断)
+         *        可跳过 PARAM_ERR_OUT_OF_RANGE 检查。 */
+        int (*load)(void *ctx, uint32_t param_id, uint8_t *data, uint16_t len,
+                    uint16_t *read_len);
+        /** 批量加载全部参数。NULL=走逐条 load；非 NULL=param_load_all 优先调用。
+         *  后端一次扫描, 把每条记录经 sink->restore 推给框架, 典型场景是
+         *  追加写日志型存储（mkv）的 O(N²)→O(N) 优化。
+         *
+         *  @param ctx  实例上下文
+         *  @param sink 框架注入的数据出口 (非 NULL, 且 restore 非 NULL)
+         *  @return 0=全部记录已推完；>0=扫描不完整 (存在未被接受的记录: 单条
+         *          超出后端扫描缓冲的大 BLOB/STRING, 或 restore 拒绝),
+         *          param_load_all 会回退到逐条 load；<0=失败
+         *  @note sink 与 sink->ctx 仅在本次调用期间有效, 后端不得缓存。
+         *  @note 框架在 SYS_LOCK_PARAM **之外**调用本回调: Flash 扫描期间
+         *        不持全局锁, 其他任务可正常访问参数。 */
+        int (*load_all)(void *ctx, const param_restore_sink_t *sink);
+        /** 保存指定参数的数据。删除操作请用 delete 回调，不要用 len==0 隐式删除。
+         *
+         *  @note 框架在 SYS_LOCK_PARAM **持锁状态下**调用本回调。这把锁同时
+         *        承担"同一时刻只有一个后端调用"的串行化: 存储后端的内部
+         *        可变状态 (mkv 的 write_offset、iniparser 的字典与临时文件)
+         *        没有自己的锁, 完全依赖本锁互斥。因此回调内**不得**再调
+         *        任何加锁 API (端口层为非递归锁)。持有时间仅覆盖单条记录,
+         *        而不是整轮保存。
+         *  @note 传入的 data 在调用期间不会被并发修改 (写入路径同样持锁),
+         *        但返回后缓存可能立即变化 —— 需跨调用一致请由调用者同步。
+         *  @return 0 = 已写入; 非 0 = 失败。失败原因不区分 (含后端统一为 -1 的
+         *          情形), 框架在 API 边界统一翻译为 PARAM_ERR_FLASH_FAIL。 */
+        int (*save)(void *ctx, uint32_t param_id, const uint8_t *data, uint16_t len);
+        /** 批量保存事务开始 (NULL = 本后端无批量优化)。
+         *
+         *  param_save_all 的批量通路由本回调与 save_commit 组成:
+         *    save_begin → 框架逐条调 save → save_commit
+         *  遍历与加锁由框架负责, 后端只表达"进入/退出批量模式"。
+         *  后端只需在自己内部打开批量模式 (如 iniparser 置 defer_dump,
+         *  让 save 只改字典不落盘), 无需认识框架的遍历 API 或条目 vtable。
+         *  逐条的 PERSIST 过滤仍由 param_data_ops 层负责。
+         *
+         *  @note 二者必须同时提供, 或同时为 NULL。
+         *  @note begin / commit 在 SYS_LOCK_PARAM **之外**调用, 实现内可安全
+         *        调用加锁 API; 但夹在中间的逐条 save 由框架**逐条持锁**调用
+         *        (见 save 槽位: 后端内部状态靠该锁互斥), 因此"批量模式"标记
+         *        必须保存在后端实例上 —— 它要跨越框架释放锁的间隙持续有效,
+         *        不能只存在于某次调用的栈上。
+         *  @return 0 = 已进入批量模式; 非 0 = 失败 (param_save_all 直接上抛,
+         *          不退化为逐条 —— 免得"批量不可用"被静默掩盖)。 */
+        int (*save_begin)(void *ctx);
+        /** 批量保存事务提交: 把 save_begin 以来累积的改动一次性落盘。
+         *
+         *  @note 仅当 save_begin 返回 0 时调用; 即使中间有条目 save 失败也会
+         *        调用 (提交已成功部分, 错误码由 param_save_all 汇总)。
+         *  @return 0 = 已落盘; 非 0 = 失败 (param_save_all 在无更早错误时上报) */
+        int (*save_commit)(void *ctx);
+        /** 删除单个参数的持久化数据 (NULL = 后端不支持)
+         *  @return 0 = 已删除; 非 0 = 失败 → PARAM_ERR_FLASH_FAIL */
+        int (*delete)(void *ctx, uint32_t param_id);
+        /** 擦除全部持久化数据
+         *  @return 0 = 已擦除; 非 0 = 失败 → PARAM_ERR_FLASH_FAIL */
+        int (*erase_all)(void *ctx);
+        /** 去初始化存储后端 */
+        int (*deinit)(void *ctx);
+        /** 读取当前激活分区索引 (PARAM_PARTITION_FACTORY~PARAM_PARTITION_USER_MAX, NULL=单分区不支持) */
+        int (*get_active_partition)(void *ctx, uint8_t *index);
+        /** 写入激活分区索引 — 存储介质由后端决定 (FAL 后端写启动裸分区,
+         *  iniparser 后端写 <base_dir>/param_boot 文本文件), 下次启动生效 (NULL=不支持) */
+        int (*set_active_partition)(void *ctx, uint8_t index);
+        /** 按索引获取指定分区的存储驱动 — 单例语义 (PARAM_PARTITION_FACTORY=factory, 其他参见 PARAM_PARTITION_USER_MIN~MAX) */
+        const struct param_storage_drv *(*get_partition)(void *ctx, uint8_t index);
+    } param_storage_drv_t;
+
+    /**
+     * @brief 模块基类 (链表节点)
+     *
+     * App 和 IP 模块共用此基类，挂入全局单条链表。
+     * vtable 多态消除类型分支。
+     */
+    struct param_module_node
+    {
+        param_module_node_t *next;           /**< 链表下一节点 */
+        uint16_t module_id;                  /**< 模块 ID (App 0x01~0x7F, IP 0x80~0xFF, 见 module_ids.h) */
+        uint16_t param_count;                /**< 该模块的参数数量 */
+        const char *name;                    /**< 模块名称 (调试用) */
+        param_entry_t **table;               /**< 参数条目指针数组 */
+        const param_module_vtable_t *vtable; /**< 指向模块级 vtable */
+        uint8_t dirty : 1;                   /**< 模块级 dirty 标志 */
+        uint8_t initialized : 1;             /**< 初始化完成标志 (vtable->init 成功置位, deinit 清除) */
+    };
+
+    /**
+     * @brief 模块实例 (App 与 IP 共用, 模块基类派生)
+     *
+     * App 与 IP 共用此唯一结构体定义 (IP 侧以别名 ip_instance_t 引用,
+     * 见 ip_param_manager.h)。回调语义两侧对称:
+     *   read  (NULL=直接返缓存) / write / flush / init / exec
+     *
+     * ctx 字段的双重语义:
+     *   - App 模块: 业务实例私有上下文
+     *   - IP 模块:  driver 私有数据指针
+     */
+    struct param_module
+    {
+        param_module_node_t node; /**< 基类节点 */
+        param_read_fn read;       /**< 参数读取回调 (NULL = 直接返缓存) */
+        param_write_fn write;     /**< 参数写入回调 (校验/转换) */
+        param_flush_fn flush;     /**< 刷入硬件的回调 */
+        param_init_fn init;       /**< 模块初始化回调 */
+        param_exec_fn exec;       /**< 模块命令执行回调 */
+        void *ctx;                /**< 模块私有上下文 (IP 侧: driver 私有数据) */
+    };
+
+    /**
+     * @brief 全局统计信息
+     */
+    typedef struct
+    {
+        uint16_t module_count;           /**< 已注册模块数 */
+        uint16_t param_count;            /**< 已注册参数总数 */
+        uint16_t dirty_count;            /**< 当前 dirty 参数数 */
+        uint16_t persist_count;          /**< 需持久化的参数数 */
+        uint16_t flush_error_count;      /**< flush 失败累计 */
+        uint16_t flush_order_miss_count; /**< 不在 ORDER 中的模块数 */
+    } param_stats_t;
+
+    /**
+     * @defgroup public_api 应用层 API — 用户代码直接调用
+     * @{
+     *
+     * 分组顺序: 生命周期 → 存储后端管理 → 写入 → 读取 → exec →
+     *           flush → 持久化CRUD → 重置 → 统计/遍历/工具
+     */
+
+    /* ================================================================
+     *  生命周期
+     * ================================================================ */
+
+    /**
+     * @brief 初始化参数管理框架
+     *
+     * 驱动由工厂函数预初始化后传入，此函数仅存储指针。
+     *
+     * @param storage 持久化后端驱动 (可为 NULL)
+     * @param notify  参数变化通知回调 (可为 NULL, 由回调实现者自行处理防重入)
+     * @return PARAM_OK 成功，PARAM_ERR_BUSY 重复初始化
+     */
+    int param_init(const param_storage_drv_t *storage, param_notify_fn notify);
+
+    /**
+     * @brief 反初始化，释放所有资源
+     */
+    void param_deinit(void);
+
+    /** @brief 查询参数管理框架是否已初始化 (param_init 成功后 true, param_deinit 后 false) */
+    bool param_is_initialized(void);
+
+    /** @brief 查询指定模块是否已完成初始化 (vtable->init 成功后置位, deinit 清除) */
+    bool param_module_is_initialized(uint16_t module_id);
+
+    /**
+     * @brief 注册模块及其参数表 — App / IP 共用注册入口
+     *
+     * 模块实例 (含 module_id 与 vtable) 由 PARAM_APP_MODULE_DEFINE /
+     * PARAM_IP_MODULE_DEFINE 生成, 本函数只做注册; PARAM_MODULE_INIT 一步
+     * 完成"定义 + 注册"。需追加自定义初始化时手写注册函数并直接调用本函数。
+     *
+     * @note 与参数级 vtable 无关: 注册不代选 App/IP 类型, node->vtable
+     *       未由 DEFINE 宏写入时拒绝注册 (防"注册成功但后续调用野指针")。
+     *
+     * @param module  模块实例 (DEFINE 宏生成的 xxx_module)
+     * @param entries 参数条目指针数组 (PARAM_TABLE 定义)
+     * @param count   参数数量 (PARAM_COUNT)
+     * @return PARAM_OK 成功;
+     *         PARAM_ERR_NOT_INITIALIZED 框架未 param_init;
+     *         PARAM_ERR_INVALID_ID 入参非法 / node->vtable 未设置;
+     *         PARAM_ERR_ALREADY_REG 该 module_id 已注册;
+     *         PARAM_ERR_NO_MEMORY 哈希表容量不足
+     *
+     * @note 必须在 param_init 之后、param_load_all / param_reset_all
+     *       之前调用; 晚注册的模块需再次 load/reset 才会触发 vtable->init。
+     */
+    int param_module_register(param_module_t *module,
+                              param_entry_t **entries,
+                              uint16_t count);
+
+    /* ================================================================
+     *  存储后端管理
+     * ================================================================ */
+
+    /**
+     * @brief 运行时替换持久化后端驱动 — 纯指针替换
+     *
+     * 仅替换 g_pm.storage 指针，不触发旧驱动的 deinit，不触发 save/load。
+     * 旧驱动在替换后仍然有效，可保存指针并在之后切回。
+     *
+     * @param storage 新的存储后端驱动 (可为 NULL 停用持久化)
+     * @return PARAM_OK 成功; PARAM_ERR_NOT_INITIALIZED 框架未初始化;
+     *         PARAM_ERR_NOT_SUPPORTED 驱动缺 load/save 回调 (被拒绝)
+     */
+    int param_set_storage(const param_storage_drv_t *storage);
+
+    /**
+     * @brief 按分区索引获取存储后端驱动实例
+     *
+     * 通过当前存储驱动的 get_partition 虚函数获取指定分区的驱动。
+     * 单例语义 (工厂模式): 同一分区索引多次调用返回同一实例。
+     *
+     * @param index 分区索引 (PARAM_PARTITION_FACTORY=factory, PARAM_PARTITION_USER_MIN~MAX=用户)
+     * @return 驱动指针，当前存储为 NULL 或不支持 get_partition 时返回 NULL
+     */
+    const param_storage_drv_t *param_get_storage_partition(uint8_t index);
+
+    /** @brief 获取当前存储后端的激活分区索引
+     *  @param index [out] 分区索引
+     *  @return PARAM_OK 成功; PARAM_ERR_NOT_SUPPORTED 单分区/无存储;
+     *          PARAM_ERR_FLASH_FAIL 读启动分区失败 */
+    int param_storage_get_active_partition(uint8_t *index);
+    /** @brief 设置存储后端的激活分区索引 (下次启动生效)
+     *  @return PARAM_OK 成功; PARAM_ERR_NOT_SUPPORTED 单分区/无存储;
+     *          PARAM_ERR_FLASH_FAIL 写入启动分区失败 */
+    int param_storage_set_active_partition(uint8_t index);
+
+    /* ================================================================
+     *  参数写入
+     * ================================================================ */
+
+    /**
+     * @brief 写入参数 (缓存模式，不立即刷硬件)
+     *
+     * @note 仅适用于值类型 (UINT/INT/FLOAT/BOOL/ENUM/EXEC)。
+     *   BLOB/STRING 的 payload 经 .ptr 传递, 而 param_value_t 无法携带长度,
+     *   本入口无法校验源的容量/有效性 (向 STRING 条目写 .u32 会被当成
+     *   指针解引用) → 返回 PARAM_ERR_TYPE_MISMATCH。
+     *   请改用带长度的专用入口: param_write_string /
+     *   param_write_raw。
+     * @note 超范围值**拒绝** (PARAM_ERR_OUT_OF_RANGE),
+     *   不做静默裁剪; 需要裁剪语义时显式调用 param_validate_all 或
+     *   param_write_ex(..., PARAM_WR_CLAMP)。对 EXEC 参数调用返回
+     *   PARAM_ERR_EXEC_ONLY。
+     *
+     * @param param_id 参数 ID
+     * @param value    新值
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_write(uint32_t param_id, param_value_t value);
+
+    /**
+     * @brief 写入参数缓存 (跳过 apply 回调)
+     *
+     * 只更新缓存值并标记 dirty，不调用模块的 apply 回调。
+     * 适用场景: apply_cb 内部需要对值做裁剪修正，避免重入 param_write。
+     *
+     * App/IP 差异:
+     *   - App 参数: 跳过 apply，与 param_write 的区别在于不触发业务校验。
+     *   - IP 参数:  与 param_write 行为完全相同 (IP 无 apply 回调)。
+     *
+     * @note 同 param_write: 不接受 BLOB/STRING (无长度信息)。
+     *
+     * @param param_id 参数 ID
+     * @param value    新值
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_write_cache(uint32_t param_id, param_value_t value);
+
+    /**
+     * @brief 同步写入参数
+     *
+     * "同步" = 立即执行校验/下发, 但**不承诺硬件已更新**:
+     *   - IP 参数: write 回调存在时直通硬件，更新缓存，清 dirty。
+     *   - App 参数: 执行 apply 校验并**标脏** (App 硬件由 param_flush
+     *     按 dirty 下发 —— 值在下一轮 flush 到达硬件)。
+     *   - 未注册 write 回调 (App / IP 一视同仁): 仅更新缓存 (App 标脏 /
+     *     IP 清脏), 返回 PARAM_OK。write 是可选钩子, 不是写入的必要条件。
+     *
+     * @note 同 param_write: 不接受 BLOB/STRING (无长度信息)。
+     * @note 需要"超范围裁剪"语义时用 param_write_ex(..., PARAM_WR_CLAMP)。
+     *
+     * @param param_id 参数 ID
+     * @param value    新值
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_write_sync(uint32_t param_id, param_value_t value);
+
+    /**
+     * @brief 带策略旗标的写入入口 (高级)
+     *
+     * 与 param_write 相同, 但可携带写策略旗标。当前唯一旗标:
+     *   PARAM_WR_CLAMP — 超范围值裁剪到合法区间而非拒绝
+     *   (数值类型生效; BLOB/STRING 无范围语义, 旗标无意义)。
+     * 未定义旗标位返回 PARAM_ERR_NOT_SUPPORTED (拒绝而非静默忽略)。
+     *
+     * @note 同 param_write: 不接受 BLOB/STRING (无长度信息)。
+     * @param param_id 参数 ID
+     * @param value    新值
+     * @param flags    PARAM_WR_* 组合
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_write_ex(uint32_t param_id, param_value_t value, uint32_t flags);
+
+    /**
+     * @brief 带策略旗标的原始字节流写入 (高级)
+     *
+     * 对 BLOB/STRING/EXEC: 与 param_write_raw 完全等价 (flags 必须为 0)。
+     * 对值类型: 解码字节为 param_value_t 后走 param_write_ex
+     * (支持 PARAM_WR_CLAMP)。
+     *
+     * @param param_id 参数 ID
+     * @param data     数据缓冲区
+     * @param len      数据长度
+     * @param flags    PARAM_WR_* 组合
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_write_bytes(uint32_t param_id, const uint8_t *data, uint16_t len,
+                          uint32_t flags);
+
+    /**
+     * @brief 原始字节流写入
+     * @param param_id 参数 ID
+     * @param data     数据缓冲区
+     * @param len      数据长度
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_write_raw(uint32_t param_id, const uint8_t *data, uint16_t len);
+
+    /**
+     * @brief 用缓存当前值重新执行完整写入路径 (re-apply)
+     *
+     * 直接取 entry->cache 作为新值走完整写入流程:
+     * 越界旧值先裁剪收敛 (维护语义, 用户直写才拒绝) →
+     * write/apply 回调 → 缓存更新 → dirty 标记 → notify 通知。
+     * 不触发任何硬件/回调读取。
+     *
+     * 适用场景: 外部条件变化 (range 收紧、模式切换、约束变更) 后，
+     * 需要对已缓存参数重新校验/下发，无需调用者先 param_read 再 param_write。
+     *
+     * @note READONLY / EXEC 参数按写入规则拒绝。
+     *
+     * @param param_id 参数 ID
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_reapply(uint32_t param_id);
+
+    /* ================================================================
+     *  参数读取
+     * ================================================================ */
+
+    /**
+     * @brief 读取参数当前值 (优先硬件/回调读取，失败回退缓存)
+     *
+     * @attention STRING/BLOB 类型的返回值为指向框架内部静态缓冲区的指针
+     *   (value->ptr)，并非值的拷贝:
+     *   - 其他线程并发写入该参数后，指针内容会随之改变 (非快照)
+     *   - 指针生命周期与参数条目绑定，禁止长期持有或释放
+     *   - 需要安全拷贝时请改用 param_read_string() / param_read_raw()
+     * @note 读回调失败时静默回退缓存, 无法区分"实时值"与"旧缓存";
+     *   需要只读权威源时用 param_read_hw()。
+     *
+     * @param param_id 参数 ID
+     * @param value    [out] 接收值
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_read(uint32_t param_id, param_value_t *value);
+
+    /**
+     * @brief 读取参数当前缓存值 (纯缓存读取，绝不触发硬件/回调)
+     *
+     * 与 param_read 的区别: 直接返回 entry->cache，不调用 App 模块的
+     * read 回调或 IP driver 的硬件读取。
+     *
+     * 适用场景: read-modify-write (读缓存→修改→param_write_cache)、
+     * 高频轮询展示、硬件未就绪时需要确定性返回的场合。
+     *
+     * @param param_id 参数 ID
+     * @param value    [out] 接收值 (STRING/BLOB 返回内部缓冲区指针，
+     *                 风险与 param_read 相同)
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_read_cache(uint32_t param_id, param_value_t *value);
+
+    /**
+     * @brief 原始字节流读取参数
+     *
+     * 对值类型 (UINT/INT/FLOAT/BOOL/ENUM): 拷贝 sizeof(param_value_t) 字节。
+     * 对 BLOB/STRING 类型: 拷贝外部缓冲区的数据。
+     *
+     * @param param_id 参数 ID
+     * @param data     用户缓冲区 (可为 NULL，此时仅查询长度)
+     * @param len      [in/out] 输入为缓冲区容量, 输出为实际拷贝字节数
+     * @return PARAM_OK 成功, PARAM_ERR_INVALID_ID 参数不存在
+     */
+    int param_read_raw(uint32_t param_id, uint8_t *data, uint16_t *len);
+
+    /**
+     * @name 类型化读写快捷函数
+     *
+     * 封装 param_write / param_read，避免手动构造 param_value_t。
+     * 运行时校验目标条目的类型: 对 FLOAT 条目调 param_write_u32
+     * 返回 PARAM_ERR_TYPE_MISMATCH (防止位模式静默损坏)。
+     * param_write_i32 / param_read_i32 对 ENUM 条目同样放行 (共用 .i32)。
+     * @{
+     */
+
+    /** @brief uint32_t 类型写入 */
+    int param_write_u32(uint32_t id, uint32_t val);
+    /** @brief int32_t 类型写入 */
+    int param_write_i32(uint32_t id, int32_t val);
+    /** @brief float 类型写入 */
+    int param_write_f32(uint32_t id, float val);
+    /** @brief bool 类型写入 */
+    int param_write_bool(uint32_t id, bool val);
+
+    /** @brief uint32_t 类型读取 */
+    int param_read_u32(uint32_t id, uint32_t *val);
+    /** @brief int32_t 类型读取 */
+    int param_read_i32(uint32_t id, int32_t *val);
+    /** @brief float 类型读取 */
+    int param_read_f32(uint32_t id, float *val);
+    /** @brief bool 类型读取 */
+    int param_read_bool(uint32_t id, bool *val);
+
+    /** @} */
+
+    /**
+     * @brief 只读权威源: 直接走模块 read 回调, 不回退缓存
+     *
+     * param_read 在回调缺失/失败时静默返回缓存; 本函数只信权威源,
+     * 取不到即报错 (诊断"硬件真实状态"场景)。回调成功时回写缓存。
+     *
+     * @param param_id 参数 ID
+     * @param value    [out] 接收值
+     * @return PARAM_OK 成功; PARAM_ERR_NOT_FOUND 模块无 read 回调;
+     *         其他错误码原样上抛
+     */
+    int param_read_hw(uint32_t param_id, param_value_t *value);
+
+    /**
+     * @brief 错误码转可读字符串 (排障/日志)
+     * @param err param_status_t 错误码
+     * @return 静态常量串 (不可释放), 未知码返回 "unknown error"
+     */
+    const char *param_strerror(int err);
+
+    /**
+     * @name STRING / BLOB 快捷函数
+     * @{
+     */
+
+    /** @brief STRING 类型读取到调用者缓冲区, 超 buf_size 自动截断, 末尾始终补 '\0' */
+    int param_read_string(uint32_t id, char *buf, uint16_t buf_size);
+    /** @brief STRING 类型写入, 超 max_len 自动截断 (截断返回 PARAM_OK_TRUNCATED) */
+    int param_write_string(uint32_t id, const char *str);
+
+    /**
+     * @brief BLOB 写入说明 (专用入口已合并进 param_write_raw)
+     *
+     * BLOB 必须整块写: param_write_raw 的 BLOB 分支要求 len == blob_size,
+     * 不等时返回 PARAM_ERR_OUT_OF_RANGE (不截断/不补零)。apply 接受后
+     * 整块拷入缓存 (先验后写), notify 携带缓存指针。
+     */
+
+    /** @} */
+
+    /* ================================================================
+     *  exec 命令执行
+     * ================================================================ */
+
+    /**
+     * @brief 执行模块命令
+     *
+     * 校验 cmd_id 已作为 PARAM_FLAG_EXEC 参数注册，随后查找模块节点，
+     * 调用其 exec(param_id, arg) 直接传入全局唯一参数 ID。
+     * arg 为 param_value_t 联合体，由 user_arg 转换而成。
+     *
+     * - param_write / param_write_raw / param_write_sync 遇到
+     *   PARAM_FLAG_EXEC 参数时自动路由到 exec，无需调用者判断类型。
+     * - 执行成功后触发 notify, new_value 携带命令负载
+     *   ({.ptr = user_arg}, 与 exec 回调收到的 arg 一致)。
+     *
+     * @param cmd_id  命令 ID (MAKE_PARAM_ID 风格，高 16 位 module_id)
+     * @param user_arg 命令参数 (可为 NULL，框架内部转为 param_value_t)
+     * @return 回调返回值，PARAM_ERR_NOT_FOUND 表示未注册或模块无 exec
+     */
+    int param_exec(uint32_t cmd_id, void *user_arg);
+
+    /* ================================================================
+     *  硬件刷新
+     * ================================================================ */
+
+    /**
+     * @brief 将所有模块的 dirty 参数刷入硬件
+     *
+     * 遍历模块链表 (按 MODULE_INIT_ORDER 顺序)，对每个 dirty 模块调用 module->vtable->flush。
+     * 即使某个模块 flush 失败，仍会继续处理后续模块。
+     *
+     * @note 锁粒度: 全局锁仅用于快照模块指针, 所有 flush 回调
+     *   (含驱动寄存器写 / 总线访问) 均在锁外执行。回调内可安全调用
+     *   param_read / param_read_cache / param_save_one 等加锁 API,
+     *   慢速总线写也不会阻塞其他任务的参数访问。
+     *   回调内不得递归调用 param_flush。
+     * @note 失败重试语义: flush 失败的参数保留 dirty 标记 (缓存不回滚)，
+     *   下次调用 param_flush() 会自动重试，直到硬件收敛到缓存值。
+     *   App 模块 flush 回调失败时同样保留 dirty。
+     * @return PARAM_OK 全部成功，或最后一个失败的错误码;
+     *         PARAM_ERR_BUSY 已有 flush 在进行中
+     */
+    int param_flush(void);
+
+    /**
+     * @brief 校验所有已注册模块是否都在 MODULE_INIT_ORDER 中
+     *
+     * 注册完整性自检 (与 flush 无关): 未覆盖的模块计入
+     * flush_order_miss_count。由启动序列 (param_boot_standard) 调用一次。
+     * @return PARAM_OK 全部覆盖，PARAM_ERR_NOT_FOUND 存在未覆盖模块
+     */
+    int param_check_module_order(void);
+
+    /* ================================================================
+     *  持久化 CRUD
+     *
+     *  @note 存储后端未配置 (param_init 传 NULL / 未编译持久化) 或后端缺
+     *        对应回调时, 下列接口返回 PARAM_ERR_NOT_SUPPORTED (而非
+     *        PARAM_ERR_NOT_FOUND —— "支持但找不到"与"本固件不支持"是两件事)。
+     *        例外: param_load_all 在无存储时不报错, 只把 LOAD 阶段跳过
+     *        (INIT 阶段照常执行, 见其文档)。
+     * ================================================================ */
+
+    /** @brief 保存所有参数到持久化存储 (仅 PARAM_FLAG_PERSIST 标记的参数)
+     *
+     *  @return PARAM_OK 全部成功 (含未标记 PERSIST、因而未写介质的条目);
+     *          PARAM_ERR_FLASH_FAIL 任一失败 (逐条路径为首个失败条目; 批量路径由
+     *          后端 save_commit 上报); PARAM_ERR_NOT_SUPPORTED 本固件
+     *          不持久化; PARAM_ERR_NOT_INITIALIZED 框架未初始化
+     *  @note 写介质失败统一译作 PARAM_ERR_FLASH_FAIL —— 后端以 -1 报错, 若
+     *        直接上抛会与 PARAM_ERR_INVALID_ID 撞码。
+     *  @note 锁域: 锁内只快照条目指针 (每批若干), 每条 save 单独持锁;
+     *        save_begin / save_commit 在锁外调用。因此锁不会被跨整轮保存
+     *        持有, 但仍保证"两个后端调用不并发" (见 save 槽位的说明)。 */
+    int param_save_all(void);
+    /** @brief 保存单个参数到持久化存储
+     *  @return 与 param_save_all 同码; 另加 PARAM_ERR_INVALID_ID (ID 未注册)。
+     *          未标记 PERSIST 的参数视为成功 (不写介质)。 */
+    int param_save_one(uint32_t param_id);
+
+    /**
+     * @brief 从持久化存储加载所有参数
+     *
+     * 两阶段执行:
+     *   - LOAD 阶段: 将存储的值恢复到全部条目的缓存 (仅回填缓存,
+     *     不做逐条校验/下发);
+     *   - INIT 阶段: 按 MODULE_INIT_ORDER 顺序调用各模块的 init 回调。
+     *
+     * @par 恢复后的生效契约 (全量重初始化模型)
+     * 恢复后**不**逐条 apply/write: 批量加载无可用顺序 (LOAD 阶段按
+     * 哈希槽序遍历), 逐条校验会因兄弟参数尚未恢复而产生假拒绝与
+     * N 次副作用。init 回调面对的是完整恢复后的缓存集合, 是批量
+     * 校验/下发 (App 侧 apply) 的唯一入口 —— 在回调中通过
+     * param_read() 即可读取全部已恢复值。
+     * 未实现 init 回调的模块, 其恢复值不做校验 (仅回填缓存)。
+     * 与 param_load_one 对照: 单参数加载无 init 阶段, 因此以 write
+     * 回调作为恢复后的重新校验入口。
+     *
+     * @return PARAM_OK 成功，或第一个失败的错误码
+     *
+     * @note 锁域: LOAD 阶段不在临界区内跨整轮持有。批量通路 (后端提供
+     *   load_all) 下只有每条记录的提交在临界区内, 整段存储扫描是锁外的;
+     *   逐条兜底路径因 vtable->load 无法拆分“读介质/写缓存”, 每条单独持锁
+     *   (持有时间收敛到单条, 而非整轮)。INIT 阶段本就在锁外。
+     * @note 批量通路因此假定**本函数与保存操作不并发** (与 param_init 的
+     *   单线程假设一致, 典型场景是启动或分区切换); 且恢复期间读者可能
+     *   观察到部分恢复的缓存 (与 INIT 阶段同级语义)。需要严格隔离时
+     *   请由调用者自行串行化。
+     */
+    int param_load_all(void);
+    /** @brief 从持久化存储加载单个参数 (恢复后经 write 回调重新校验, 见 param_load_all 的生效契约)
+     *  @note 恢复值越界时先裁剪收敛; 成功后触发 notify */
+    int param_load_one(uint32_t param_id);
+
+    /**
+     * @brief 删除单个参数的持久化数据
+     * @param param_id 参数 ID
+     * @return PARAM_OK 成功，PARAM_ERR_FLASH_FAIL 删除失败，PARAM_ERR_NOT_SUPPORTED 存储不可用
+     */
+    int param_delete_one(uint32_t param_id);
+    /**
+     * @brief 擦除全部持久化数据
+     * @return PARAM_OK 成功，PARAM_ERR_FLASH_FAIL 擦除失败，PARAM_ERR_NOT_SUPPORTED 存储不可用
+     */
+    int param_delete_all(void);
+
+    /* ================================================================
+     *  重置
+     * ================================================================ */
+
+    /**
+     * @brief 重置所有参数为默认值 (default_val)
+     *
+     * 两阶段执行: 先重置全部条目缓存与 dirty, 再按 MODULE_INIT_ORDER
+     * 调用各模块 init。IP 模块的 init 会把其可写参数重新标脏
+     * (默认值仍需下发硬件), 下一次 param_flush() 后收敛清零。
+     *
+     * @note BLOB/STRING 为单缓冲配置 (缓存与默认值共享缓冲, 有意
+     *   不提供双缓冲默认值), reset 不恢复其初始默认内容 (自拷贝
+     *   被跳过, 仅清 dirty 保持现状)。
+     */
+    int param_reset_all(void);
+    /** @brief 重置指定参数为默认值 (BLOB/STRING 单缓冲, 不恢复初始内容, 语义同 param_reset_all)
+     *  @note 默认值越界时先裁剪收敛; 成功后触发 notify */
+    int param_reset_one(uint32_t param_id);
+
+    /* ================================================================
+     *  项目默认值覆盖 (编译期默认值之上的产品级默认值)
+     *
+     *  用途: core 作为共享库/submodule 时, 不同项目需要不同的"出厂默认值"。
+     *  希望集中配置而不改各模块的参数表 —— 用本组 API 在启动期把默认值覆盖掉。
+     *
+     *  与"用 param_write_cache 写一遍"的关键差别:
+     *    - 改的是**默认值本身**, 因此 param_reset_one/all 恢复出的也是项目默认值;
+     *    - **不标脏、不 notify**: 这不是"用户修改", 不会混进 dirty/持久化语义;
+     *    - 只在缓存与默认值上生效, 硬件由后续 INIT/flush 下发。
+     *
+     *  @par 正确用法 (顺序契约)
+     *  @code
+     *    register_modules();          // 条目已注册, ID 可解析
+     *    param_apply_defaults(tbl, n); // ★ 在这两步之间
+     *    param_load_all();            // LOAD: 有存储记录的参数覆盖缓存 → 用户值胜出
+     *  @endcode
+     *  结果: **有存储记录的参数保留存储值; 没有记录的参数得到项目默认值**。
+     *  因此无需再判断"存储里有没有这条记录"。param_boot_standard 的
+     *  `defaults` 钩子已按此顺序插入。
+     *
+     *  @par 不支持的类型 (返回 PARAM_ERR_NOT_SUPPORTED)
+     *   - BLOB / STRING: 单缓冲设计下 cache 与 default 指向同一缓冲区,
+     *     "换个默认值"没有独立存储位置; 请改用编译期默认值宏 (config.h 覆盖);
+     *   - EXEC: 命令没有值。
+     * ================================================================ */
+
+    /** @brief 一条"参数 → 新的默认值" */
+    typedef struct param_default
+    {
+        uint32_t      param_id; /**< 目标参数 ID */
+        param_value_t value;    /**< 新的默认值 (按参数类型取联合体字段) */
+    } param_default_t;
+
+    /**
+     * @brief 覆盖单个参数的默认值 (同步更新缓存, 不标脏/不 notify)
+     *
+     * @param param_id 参数 ID
+     * @param value    新的默认值
+     * @return PARAM_OK 成功;
+     *         PARAM_ERR_NOT_INITIALIZED 框架未初始化;
+     *         PARAM_ERR_INVALID_ID 参数不存在;
+     *         PARAM_ERR_OUT_OF_RANGE 值超出该参数的 [min,max] / 枚举非法;
+     *         PARAM_ERR_NOT_SUPPORTED BLOB/STRING/EXEC (见上)
+     *
+     * @note 校验用的是写入路径同一套 pre_write 表 (范围/枚举), 但**不改值**:
+     *       非法的项目默认值是配置错误, 直接拒绝而不是静默裁剪。
+     */
+    int param_set_default(uint32_t param_id, param_value_t value);
+
+    /**
+     * @brief 批量应用项目默认值表 (逐条 param_set_default)
+     *
+     * @param table 表 (可 NULL)
+     * @param count 条目数
+     * @return PARAM_OK 全部成功; 否则为**首个**失败的错误码 (其余条目仍会被应用,
+     *         一条配置写错不会连带丢掉整张表)
+     *
+     * @note NULL 表或 count==0 视为空操作 (返回 PARAM_OK): 让"本产品不做覆盖"
+     *       与"配了空表"两条路径同构, 调用方不必特判。
+     */
+    int param_apply_defaults(const param_default_t *table, uint16_t count);
+
+    /* ================================================================
+     *  统计 / 遍历 / 工具
+     * ================================================================ */
+
+    /** @brief 获取全局统计信息快照
+     *  @return PARAM_OK 成功; PARAM_ERR_NOT_INITIALIZED 未初始化;
+     *          PARAM_ERR_INVALID_ID stats 为 NULL */
+    int param_get_stats(param_stats_t *stats);
+    /** @brief 清零统计计数器
+     *  @return PARAM_OK 成功; PARAM_ERR_NOT_INITIALIZED 未初始化 */
+    int param_clear_stats(void);
+
+    /**
+     * @brief 获取参数数据大小 (字节数)
+     *
+     * - UINT/INT/FLOAT/BOOL/ENUM/EXEC → sizeof(param_value_t) (平台相关: 32-bit 4B, 64-bit 8B)
+     * - BLOB → blob_size
+     * - STRING → max_len + 1 (含结尾 '\0')
+     * - 未注册 → 0
+     */
+    uint16_t param_get_size(uint32_t param_id);
+
+    /**
+     * @brief 参数遍历回调
+     * @param entry     当前参数条目
+     * @param user_data 用户传入的上下文
+     * @return true 继续遍历，false 终止
+     */
+    typedef bool (*param_foreach_fn)(param_entry_t *entry, void *user_data);
+
+    /**
+     * @brief 遍历参数
+     *
+     * @note 回调在锁外执行: 回调内可安全调用 param_read / param_write /
+     *   param_save_one 等加锁 API, 不会自死锁。回调收到的条目指针
+     *   生命周期与注册表一致, 其缓存内容为 best-effort 快照
+     *   (可能被并发写改变)。
+     * @param module_id 指定模块 ID (0 表示遍历所有模块)
+     * @param cb        回调函数
+     * @param user_data 用户上下文
+     * @return PARAM_OK 完成/被回调终止; PARAM_ERR_NOT_INITIALIZED 未初始化;
+     *         PARAM_ERR_INVALID_ID cb 为 NULL;
+     *         PARAM_ERR_NOT_FOUND 指定模块未注册
+     */
+    int param_foreach(uint16_t module_id, param_foreach_fn cb, void *user_data);
+
+    /**
+     * @brief 运行时设置参数的范围
+     *
+     * 适用于 UINT/INT/FLOAT 数值参数 (App 与 IP 均可)。若范围收紧导致
+     * 当前缓存越界, 缓存会被裁剪到新范围并按写入路径重新标脏下发。
+     * @param param_id 参数 ID
+     * @param min_val  新最小值 (NULL 表示不改)
+     * @param max_val  新最大值 (NULL 表示不改)
+     * @return PARAM_OK 成功，或错误码
+     */
+    int param_set_range(uint32_t param_id,
+                        const param_value_t *min_val,
+                        const param_value_t *max_val);
+
+    /**
+     * @brief 读取参数的上下限范围
+     *
+     * 适用于 UINT/INT/FLOAT 数值参数 (App 与 IP 均可)。min_val / max_val
+     * 为出参, 任一传 NULL 表示忽略该侧 (例如只取最大值)。两参同时为 NULL
+     * 时仅做参数存在性与类型校验。
+     * @param param_id 参数 ID
+     * @param min_val  [out] 接收最小值 (NULL 表示忽略)
+     * @param max_val  [out] 接收最大值 (NULL 表示忽略)
+     * @return PARAM_OK 成功; PARAM_ERR_NOT_INITIALIZED 未初始化;
+     *         PARAM_ERR_INVALID_ID 参数不存在;
+     *         PARAM_ERR_TYPE_MISMATCH 非 UINT/INT/FLOAT 类型
+     * @note has_range==0 (未启用范围校验) 时 min/max 仍会被读出为定义时
+     *       的原始值, 是否真正参与校验需结合 has_range 判断。
+     */
+    int param_get_range(uint32_t param_id,
+                        param_value_t *min_val,
+                        param_value_t *max_val);
+
+    /**
+     * @brief 对所有已注册参数执行范围裁剪
+     *
+     * 遍历所有模块的参数表，对超范围的值裁剪到合法区间。
+     * @return PARAM_OK 完成; PARAM_ERR_NOT_INITIALIZED 未初始化
+     */
+    int param_validate_all(void);
+
+    /** @} */ /* public_api */
+
+/**
+ * @defgroup migration 参数版本迁移
+ * @{
+ */
+
+/** 当前存储格式版本号。破坏性变更时递增 (极少发生)。 */
+#define PARAM_SCHEMA_VERSION 1
+
+    /**
+     * @brief 迁移转换回调
+     *
+     * 框架已从存储后端读取旧值到 old_data[old_len]。
+     * 回调负责填充 new_id / new_data / new_len。
+     *
+     * @param old_data  旧值原始字节
+     * @param old_len   旧值字节数
+     * @param new_id    [out] 新参数 ID
+     * @param new_data  [out] 转换后数据 (框架提供 256 字节缓冲区)
+     * @param new_len   [out] 转换后数据长度
+     * @param ctx       迁移条目上下文
+     * @return PARAM_OK 成功; -1 跳过本条; 其他 <0 中断迁移
+     */
+    typedef int (*param_migrate_fn)(const uint8_t *old_data, uint16_t old_len,
+                                    uint32_t *new_id,
+                                    uint8_t *new_data, uint16_t *new_len,
+                                    void *ctx);
+
+    /** 迁移条目 */
+    typedef struct
+    {
+        uint32_t old_id;          /**< 旧参数 ID */
+        param_migrate_fn convert; /**< NULL = 简单 rename 到 new_id */
+        uint32_t new_id;          /**< convert==NULL 时作为目标 ID */
+        void *ctx;                /**< 回调上下文 */
+    } param_migrate_entry_t;
+
+/** 定义迁移表 (ROM) */
+#define PARAM_MIGRATE_TABLE(_name, ...) \
+    static const param_migrate_entry_t _name[] = {__VA_ARGS__}
+
+/**
+ * @brief 执行存储层参数迁移
+ * 在 param_init 之后、param_load_all 之前调用。
+ * 所有操作直接走 storage 驱动，不依赖内存哈希表。
+ *
+ * 内部流程:
+ *   1. 读 PID_SCHEMA_VER → 不存在 → 首次启动，写版本号
+ *                        → 不匹配 → 全量擦除，写版本号
+ *                        → 匹配   → 执行迁移表
+ *   2. 遍历迁移表: load(old) → convert/save(new) → delete(old)
+ *
+ * @param storage  持久化后端
+ * @param table    迁移表 (ROM)
+ * @param count    表长度
+ * @return PARAM_OK 成功
+ */
+int param_migrate_storage(const param_storage_drv_t *storage,
+                              const param_migrate_entry_t *table,
+                              uint16_t count);
+/** @} */ /* migration */
+
+/**
+ * @name 模块实例定义核心宏 (框架内部)
+ *
+ * PARAM_APP_MODULE_DEFINE / PARAM_IP_MODULE_DEFINE 与 PARAM_MODULE_INIT
+ * 的共享初始化器。唯一行为差异 (vtable / 注册函数 / 变量名) 由调用方
+ * 通过参数注入, 与 PARAM_ENTRY_* 核心宏同模式。
+ *
+ * @note 应用层代码严禁直接使用本组宏。请使用 PARAM_APP_MODULE_DEFINE /
+ *       PARAM_IP_MODULE_DEFINE / PARAM_MODULE_INIT。
+ * @{
+ */
+
+/**
+ * @brief 模块实例定义核心宏 (框架内部)
+ *
+ * 宏体采用**指定初始化器 + 可变参数**: 回调字段由调用点在宏参数里
+ * **具名**给出 (.ctx/.init/.read/.write/.exec/.flush, 任意顺序、可省略),
+ * 从根本上消除"位置参数写反"类错误 (位置参数在宏体内做指定初始化
+ * 也拦不住调用点传错顺序)。
+ *
+ * @param _vtbl     模块级 vtable (&app_module_vtable / &ip_module_vtable)
+ * @param _var      生成的实例变量名 (包装宏负责 _module 后缀)
+ * @param _mod_id   模块 ID
+ * @param _label    模块调试名称
+ * @param ...       具名字段初始化器 (.ctx / .init / .read / .write /
+ *                  .exec / .flush, 省略的字段为 NULL)
+ */
+#define PARAM_MODULE_DEFINE_CORE(_vtbl, _var, _mod_id, _label, ...)   \
+    static param_module_t _var = {                                    \
+        .node = {                                                     \
+            .module_id = (_mod_id),                                   \
+            .name = (_label),                                         \
+            .vtable = (_vtbl),                                        \
+        },                                                            \
+        __VA_ARGS__                                                   \
+    }
+
+/**
+ * @brief 模块注册函数核心宏 (框架内部)
+ *
+ * @param _reg_fn    注册函数 (App 与 IP 共用 param_module_register)
+ * @param _init_name 生成的注册函数名
+ * @param _inst_var  模块实例变量名
+ * @param _entries   参数表数组
+ */
+#define PARAM_MODULE_INIT_CORE(_reg_fn, _init_name, _inst_var, _entries)        \
+    void _init_name(void)                                                       \
+    {                                                                           \
+        _reg_fn(&_inst_var, (_entries),                                         \
+                sizeof(_entries) / sizeof((_entries)[0]));                      \
+    }
+
+/** @} */
+
+/**
+ * @brief 定义模块注册函数 (一键式) — App / IP 共用
+ *
+ * 同时生成 _mod_name##_module_init() 函数和自动注册条目。
+ * 调用此函数即完成 param_module_register。
+ *
+ * @par 为何定义在基类头
+ *  App 与 IP 的注册入口都是同一个 param_module_register, 本宏不含任何
+ *  子系统差异 (vtable 已由 PARAM_APP_MODULE_DEFINE / PARAM_IP_MODULE_DEFINE
+ *  写入模块实例), 因此按"派生 → 基类"的依赖规则归入本文件, 与
+ *  PARAM_MODULE_INIT_CORE / PARAM_MODULE_REGISTER 同居一处。
+ *
+ * @note 依赖 param_module_register, 声明见本文件 public_api 分组的
+ *       "生命周期" 小节 (App 与 IP 共用的注册入口)。
+ *
+ * @param _mod_name 模块名
+ * @param _params   参数表数组 (PARAM_TABLE 定义)
+ */
+#define PARAM_MODULE_INIT(_mod_name, _params)                          \
+    PARAM_MODULE_INIT_CORE(param_module_register,                      \
+                           _mod_name##_module_init,                    \
+                           _mod_name##_module,                         \
+                           _params)                                    \
+    PARAM_MODULE_REGISTER(_mod_name, _mod_name##_module_init)
+
+/**
+ * @brief 定义参数表 (静态数组)
+ * @param _name 数组名
+ * @param ...   以逗号分隔的参数条目指针 (&xxx.base)
+ */
+#define PARAM_TABLE(_name, ...) \
+    static param_entry_t *_name[] = {__VA_ARGS__}
+
+/**
+ * @brief 获取参数表元素个数
+ * @param _arr 参数表数组名
+ */
+#define PARAM_COUNT(_arr) (sizeof(_arr) / sizeof((_arr)[0]))
+
+    /**
+     * @brief 编译器段自动注册 (App 与 IP 共用机制)
+     *
+     * 启用 PARAM_MODULE_AUTO_REGISTER_ENABLE 后，模块的 init 函数指针
+     * 收集到 .rodata.param_modules 段, param_modules_register_all()
+     * 遍历该段并逐个调用。未启用时 PARAM_MODULE_REGISTER 展开为空,
+     * 模块 init 由启动代码手动调用 (默认方式)。
+     */
+
+    /** 编译器段自动注册的条目 */
+    typedef struct
+    {
+        void (*init)(void);
+    } param_module_reg_t;
+
+/**
+ * @brief 将一个模块的 init 函数放入指定链接器段 (.rodata.param_modules)
+ *
+ * 启用 PARAM_MODULE_AUTO_REGISTER_ENABLE 后，param_modules_register_all() 遍历该段并逐个调用 init。
+ * @param _name 模块名 (用于段符号名唯一性)
+ * @param _init 模块 register 函数
+ */
+#if PARAM_MODULE_AUTO_REGISTER_ENABLE
+
+/** 将模块 init 函数放入 .rodata.param_modules 段 */
+#define PARAM_MODULE_REGISTER(_name, _init)                                                                          \
+    __attribute__((used, section(".rodata.param_modules"))) static const param_module_reg_t _pm_auto_reg_##_name = { \
+        .init = (_init)}
+    int param_modules_register_all(void);
+
+#else
+
+#define PARAM_MODULE_REGISTER(_name, _init)
+/* auto-register disabled, call xxx_module_init() manually */
+
+#endif
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+    _Static_assert(offsetof(param_module_node_t, module_id) == sizeof(void *),
+                   "param_module_node_t.module_id offset mismatch");
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* PARAM_MANAGER_H */

@@ -1,0 +1,4 @@
+In file included from Core/ThreadSafe/newlib_lock_glue.c:59:
+Core/ThreadSafe/stm32_lock.h:249:2: warning: #warning Please set configUSE_NEWLIB_REENTRANT to 1 in FreeRTOSConfig.h, otherwise newlib will not be thread-safe [-Wcpp]
+  249 | #warning Please set configUSE_NEWLIB_REENTRANT to 1 in FreeRTOSConfig.h, otherwise newlib will not be thread-safe
+      |  ^~~~~~~

@@ -1,0 +1,379 @@
+/**
+ * @file param_storage_flashdb.c
+ * @brief 基于 FlashDB 的持久化存储后端实现
+ *
+ * @details
+ * 本文件实现 param_storage_drv_t 接口的 FlashDB 适配层。
+ *
+ * 本文件无条件提供完整实现 (不存在 stub 变体): 要不要用它由两件事决定 ——
+ *   1. 构建层: 本文件是否被编入 (不编入则工厂符号不存在);
+ *   2. 调用层: 启动流程是否调用 param_storage_flashdb_create()。
+ * 不需要持久化的产品直接传 NULL 给 param_init(), 无需任何编译期开关。
+ *
+ * FlashDB 模式下采用工厂模式管理多存储实例:
+ *   - g_ctx[MAX_INSTANCES] 静态池，按分区名查找/创建
+ *   - 同一分区名返回同一实例（幂等）
+ *   - param_storage_flashdb_create() 实现智能启动分区选择:
+ *     读取启动分区索引裸分区 → 选择目标用户分区 → 空则回退 factory
+ *
+ * @see param_storage_drv_t 接口定义
+ * @see param_storage_flashdb.h 公开 API
+ */
+
+#include "param_storage_flashdb.h"
+#include "param_storage_common.h"
+#include "param_storage_fal.h"
+#include <stdio.h>
+#include <string.h>
+
+#include "flashdb.h"
+
+/** @brief FlashDB 键名缓冲区大小 ("p" + param_id 十进制 + '\0') */
+#define FDB_KEY_MAX 16
+
+/**
+ * @brief FlashDB 存储上下文 — 每个物理分区对应一个实例
+ *
+ * 实例通过 g_ctx[MAX_INSTANCES] 静态池管理，按 part_name 查找/创建。
+ * 同一分区名多次请求返回同一实例（工厂模式 + 幂等）。
+ */
+typedef struct
+{
+    bool used;               /**< 此槽位是否已被分配 */
+    struct fdb_kvdb kvdb;    /**< FlashDB KVDB 句柄 */
+    bool kvdb_ready;         /**< KVDB 是否已初始化完成 */
+    char part_name[24];      /**< FAL 分区名（如 "param_user0"） */
+    param_storage_drv_t drv; /**< 对外暴露的存储驱动接口 */
+} flashdb_ctx_t;
+
+/** @brief 全局存储实例池（静态分配，编译期确定上限） */
+static flashdb_ctx_t g_ctx[MAX_INSTANCES];
+
+/* 分区索引→分区名 的映射与 MAX_INSTANCES 断言由 param_storage_common.h 提供;
+   启动分区索引读写与 FAL 惰性初始化由 param_storage_fal.h 提供 */
+
+/**
+ * @brief 初始化 FlashDB KVDB 实例
+ *
+ * 设置扇区大小，调用 fdb_kvdb_init 初始化指定分区的 KV 数据库。
+ *
+ * @param c FlashDB 上下文指针
+ * @return 0 成功, -1 初始化失败
+ */
+static int flashdb_init_kvdb(flashdb_ctx_t *c)
+{
+    uint32_t sec_size = FDB_SECTOR_SIZE;
+    fdb_kvdb_control(&c->kvdb, FDB_KVDB_CTRL_SET_SEC_SIZE, &sec_size);
+
+    fdb_err_t result = fdb_kvdb_init(&c->kvdb, FDB_KVDB_NAME,
+                                     c->part_name, NULL, NULL);
+    if (result != FDB_NO_ERR)
+        return -1;
+
+    c->kvdb_ready = true;
+    return 0;
+}
+
+/**
+ * @brief 检测 KVDB 分区是否为空（无任何键值对）
+ *
+ * 通过迭代器探测分区内是否有数据。
+ * 用于启动时的空分区检测 → 回退到 factory 分区。
+ *
+ * @param c FlashDB 上下文指针
+ * @return true 分区为空或未初始化，false 分区有数据
+ */
+static bool kvdb_is_empty(flashdb_ctx_t *c)
+{
+    if (!c || !c->kvdb_ready)
+        return true;
+
+    struct fdb_kv_iterator itr;
+    fdb_kv_iterator_init(&c->kvdb, &itr);
+    return !fdb_kv_iterate(&c->kvdb, &itr);
+}
+
+/**
+ * @brief 按索引获取分区驱动 — 单例语义 (运行时分区切换用)
+ *
+ * 通过 param_partition_name() 取分区名，再委托 param_storage_flashdb_get_driver。
+ * 单例: 同一分区名多次调用返回同一驱动实例。
+ * 运行时切换允许目标分区为空 — 由调用者决定是否 param_load_all。
+ *
+ * @param ctx   存储上下文（本实现忽略）
+ * @param index 分区索引
+ * @return 驱动指针，池耗尽时返回 NULL
+ */
+static const param_storage_drv_t *flashdb_get_partition(void *ctx, uint8_t index)
+{
+    (void)ctx;
+    return param_storage_flashdb_get_driver(param_partition_name(index));
+}
+
+/**
+ * @brief FlashDB 加载: 通过键名 "p<param_id>" 读取 Blob 数据
+ *
+ * @param ctx       FlashDB 上下文
+ * @param param_id  参数 ID
+ * @param data      输出缓冲区
+ * @param len       缓冲区长度
+ * @param read_len  [out] 实际写入字节数 (可 NULL)
+ * @return PARAM_OK 成功, PARAM_ERR_NOT_FOUND 键不存在,
+ *         PARAM_ERR_OUT_OF_RANGE 记录长度超出 len, PARAM_ERR_INVALID_ID 参数非法
+ *
+ * @note FlashDB 的 fdb_kv_get_blob 用 0 同时表示"键不存在"与"读失败",
+ *       本层无法区分 —— 两者一律按 PARAM_ERR_NOT_FOUND 处理 (框架保持
+ *       默认值)。这是后端能力限制, 非契约模糊。
+ */
+static int flashdb_load(void *ctx, uint32_t param_id,
+                        uint8_t *data, uint16_t len, uint16_t *read_len)
+{
+    flashdb_ctx_t *c = (flashdb_ctx_t *)ctx;
+    if (!c || !c->kvdb_ready || !data || len == 0)
+        return PARAM_ERR_INVALID_ID;
+
+    char key[FDB_KEY_MAX];
+    snprintf(key, sizeof(key), "p%lu", (unsigned long)param_id);
+
+    struct fdb_blob blob;
+    size_t got = fdb_kv_get_blob(&c->kvdb, key,
+                                fdb_blob_make(&blob, data, len));
+    if (got == 0)
+        return PARAM_ERR_NOT_FOUND; /* 键不存在: 框架保持默认值 */
+    /* 存储记录比条目容量长 (格式变更/数据损坏): 已拷入部分不可信 → 上报 */
+    if (got > (size_t)len)
+        return PARAM_ERR_OUT_OF_RANGE;
+
+    if (read_len)
+        *read_len = (uint16_t)got;
+    return PARAM_OK;
+}
+
+/**
+ * @brief FlashDB 保存: 以键名 "p<param_id>" 写入 Blob 数据
+ *
+ * @param ctx       FlashDB 上下文
+ * @param param_id  参数 ID
+ * @param data      数据缓冲区
+ * @param len       数据长度
+ * @return 0 成功, -1 写入失败
+ */
+static int flashdb_save(void *ctx, uint32_t param_id,
+                        const uint8_t *data, uint16_t len)
+{
+    flashdb_ctx_t *c = (flashdb_ctx_t *)ctx;
+    if (!c || !c->kvdb_ready || !data || len == 0)
+        return -1;
+
+    char key[FDB_KEY_MAX];
+    snprintf(key, sizeof(key), "p%lu", (unsigned long)param_id);
+
+    struct fdb_blob blob;
+    fdb_err_t result = fdb_kv_set_blob(&c->kvdb, key,
+                                       fdb_blob_make(&blob, data, len));
+    return (result == FDB_NO_ERR) ? 0 : -1;
+}
+
+/**
+ * @brief FlashDB 删除: 删除键 "p<param_id>"
+ *
+ * @param ctx       FlashDB 上下文
+ * @param param_id  参数 ID
+ * @return 0 成功, -1 失败
+ */
+static int flashdb_delete(void *ctx, uint32_t param_id)
+{
+    flashdb_ctx_t *c = (flashdb_ctx_t *)ctx;
+    if (!c || !c->kvdb_ready)
+        return -1;
+
+    char key[FDB_KEY_MAX];
+    snprintf(key, sizeof(key), "p%lu", (unsigned long)param_id);
+    fdb_err_t result = fdb_kv_del(&c->kvdb, key);
+    return (result == FDB_NO_ERR) ? 0 : -1;
+}
+
+/**
+ * @brief FlashDB 全量擦除: 逐键删除
+ *
+ * 采用"删除 + 重启迭代器"循环: fdb_kv_del 可能触发 GC 搬移扇区,
+ * 使迭代器位置失效, 因此每删一键重新初始化迭代器 (erase_all 属低频
+ * 操作, O(N²) 遍历代价可接受)。迭代器只返回 status==WRITE 的键,
+ * 已删除键被跳过, 循环必然终止。
+ *
+ * @param ctx FlashDB 上下文
+ * @return 0 全部键已删除, -1 失败
+ */
+static int flashdb_erase_all(void *ctx)
+{
+    flashdb_ctx_t *c = (flashdb_ctx_t *)ctx;
+    if (!c || !c->kvdb_ready)
+        return -1;
+
+    for (;;) {
+        struct fdb_kv_iterator itr;
+        fdb_kv_iterator_init(&c->kvdb, &itr);
+        if (!fdb_kv_iterate(&c->kvdb, &itr))
+            break; /* 无剩余有效键: 擦除完成 */
+
+        /* name 为迭代器内定长缓冲, 删除期间保持有效 */
+        const char *key = itr.curr_kv.name;
+        if (key[0] == '\0')
+            return -1; /* 迭代器异常: 拒绝静默成功 */
+
+        if (fdb_kv_del(&c->kvdb, key) != FDB_NO_ERR)
+            return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief FlashDB 去初始化: 反初始化 KVDB 并标记未就绪
+ *
+ * @param ctx FlashDB 上下文
+ * @return 0 成功, -1 失败
+ */
+static int flashdb_deinit(void *ctx)
+{
+    flashdb_ctx_t *c = (flashdb_ctx_t *)ctx;
+    if (!c)
+        return -1;
+    if (c->kvdb_ready)
+    {
+        fdb_kvdb_deinit(&c->kvdb);
+        c->kvdb_ready = false;
+    }
+    return 0;
+}
+
+/**
+ * @brief 创建默认存储驱动（启动时调用，智能分区选择）
+ *
+ * @details
+ * 启动流程分 4 个阶段，任意阶段失败均回退到 param_factory:
+ *
+ *   1. FAL 初始化: 经 param_fal_ensure_init() 惰性初始化 (每 TU 仅首次生效)
+ *   2. 读取启动索引: 从启动分区裸分区读取 1 字节 boot_index
+ *      - 0 → factory
+ *      - 1~PARAM_PARTITION_USER_MAX → 用户分区
+ *      - 其他 → 回退 factory
+ *   3. 初始化目标分区: 通过工厂获取对应分区驱动（触发 KVDB 初始化）
+ *      - 驱动获取失败 → 回退 param_factory
+ *   4. 空分区检测: boot_index 在 PARAM_PARTITION_USER_MIN~PARAM_PARTITION_USER_MAX 且目标分区为空时
+ *      - 反初始化目标，切换到 factory，写入 boot_index=PARAM_PARTITION_FACTORY
+ *      - 确保新出厂设备首次启动不会读到空用户分区
+ *
+ * 设计意图: 通过启动分区索引实现简单的 A/B 分区切换能力。
+ * 固件升级时写入目标 boot_index，下次启动自动切换到新分区。
+ *
+ * @return 已初始化的存储驱动（保证非 NULL，最坏返回 factory 驱动）
+ */
+const param_storage_drv_t *param_storage_flashdb_create(void)
+{
+    /* 阶段 1: 惰性 FAL 初始化 */
+    param_fal_ensure_init();
+
+    /* 阶段 2: 读取启动分区索引 (失败则保持 0xFF → 走 factory) */
+    uint8_t boot_index = 0xFF;
+    (void)param_boot_index_get(NULL, &boot_index);
+
+    /* 阶段 3: 索引 → 分区名 (越界/未填充自动回退 factory) */
+    const char *target = param_partition_name(boot_index);
+
+    /* 阶段 4: 初始化目标分区，空则回退 factory */
+    const param_storage_drv_t *drv = param_storage_flashdb_get_driver(target);
+    if (!drv)
+    {
+        drv = param_storage_flashdb_get_driver(param_partition_name(PARAM_PARTITION_FACTORY));
+        return drv;
+    }
+
+    if (boot_index >= PARAM_PARTITION_USER_MIN && boot_index <= PARAM_PARTITION_USER_MAX
+        && kvdb_is_empty((flashdb_ctx_t *)drv->ctx))
+    {
+        drv->deinit(drv->ctx);
+        drv = param_storage_flashdb_get_driver(param_partition_name(PARAM_PARTITION_FACTORY));
+        (void)param_boot_index_set(NULL, PARAM_PARTITION_FACTORY);
+    }
+
+    return drv;
+}
+
+/**
+ * @brief 获取 FlashDB 持久化后端驱动（工厂模式，按分区名创建独立实例）
+ *
+ * @details
+ * 采用"查找→创建"两阶段工厂模式:
+ *
+ *   1. 查找已有实例: 遍历 g_ctx[] 查找 used==true 且 part_name 匹配的槽位。
+ *      找到后若 kvdb_ready 为 false 则惰性重新初始化。
+ *      同一分区名多次调用返回同一实例指针（幂等性保证）。
+ *
+ *   2. 创建新实例: 若无匹配，分配第一个空闲槽位 (used==false)。
+ *      初始化 flashdb_ctx_t 结构体，填充所有 8 个存储驱动回调:
+ *      load/save/delete/erase_all/deinit/分区读写/get_partition。
+ *      设置 used=true，惰性初始化 FAL，调用 flashdb_init_kvdb。
+ *
+ *   3. 池耗尽: 所有 MAX_INSTANCES 个槽位均已使用时返回 NULL。
+ *
+ * 典型用法:
+ * @code
+ *   drv0 = param_storage_flashdb_get_driver("param_user0");
+ *   drv1 = param_storage_flashdb_get_driver("param_bank1");
+ *   param_init(drv0);
+ *   param_set_storage(drv1);  // 运行时切换分区
+ * @endcode
+ *
+ * @param part_name FAL 分区名 (如 "param_user0")，不能为 NULL
+ * @return 驱动句柄（静态分配），同一分区名返回同一实例；池耗尽返回 NULL
+ */
+const param_storage_drv_t *param_storage_flashdb_get_driver(const char *part_name)
+{
+    if (!part_name)
+        return NULL;
+
+    /* 阶段 1: 查找已有实例 */
+    for (int i = 0; i < MAX_INSTANCES; i++)
+    {
+        if (g_ctx[i].used &&
+            strncmp(g_ctx[i].part_name, part_name, sizeof(g_ctx[i].part_name)) == 0)
+        {
+            /* 惰性重初始化: 条件为 kvdb_ready 为假 (实例被 deinit 后即如此) */
+            if (!g_ctx[i].kvdb_ready)
+                flashdb_init_kvdb(&g_ctx[i]);
+            return &g_ctx[i].drv;
+        }
+    }
+
+    /* 阶段 2: 分配新槽位并初始化 */
+    for (int i = 0; i < MAX_INSTANCES; i++)
+    {
+        if (!g_ctx[i].used)
+        {
+            flashdb_ctx_t *c = &g_ctx[i];
+            memset(c, 0, sizeof(*c));
+            strncpy(c->part_name, part_name, sizeof(c->part_name) - 1);
+            c->part_name[sizeof(c->part_name) - 1] = '\0';
+            /* 绑定全部 8 个存储驱动回调 */
+            c->drv.ctx = c;
+            c->drv.load = flashdb_load;
+            c->drv.save = flashdb_save;
+            c->drv.delete = flashdb_delete;
+            c->drv.erase_all = flashdb_erase_all;
+            c->drv.deinit = flashdb_deinit;
+            c->drv.get_active_partition = param_boot_index_get;
+            c->drv.set_active_partition = param_boot_index_set;
+            c->drv.get_partition = flashdb_get_partition;
+            c->used = true;
+
+            /* 惰性 FAL 初始化（每个 TU 仅一次） */
+            param_fal_ensure_init();
+
+            flashdb_init_kvdb(c);
+            return &c->drv;
+        }
+    }
+
+    /* 阶段 3: 池耗尽 */
+    return NULL;
+}

@@ -1,0 +1,652 @@
+$ powershell -NoProfile -Command "$d='C:\Users\ynd\Desktop\work\myproject\src'; $g=Get-ChildItem -Path $d -Recurse -Include *.c,*.h -File | Where-Object { $_.FullName -notmatch '\\lib\\EasyLogger\\demo\\' }; $r=$g | ForEach-Object { [pscustomobject]@{ p=$_.FullName.Substring($d.Length+1); n=(Get-Content $_.FullName | Measure-Object -Line).Lines } }; $r | Sort-Object n -Descending | Select-Object -First 25 | Format-Table -AutoSize; 'TOTAL_FILES=' + $r.Count; 'TOTAL_LINES=' + ($r | Measure-Object -Property n -Sum).Sum"
+[exit 0]
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+正在分析“\lib\EasyLogger\demo\”－ 无法识别的转义序列 \l。
+所在位置 行:1 字符: 222
++ ...  Where-Object { $_.FullName -notmatch '\lib\EasyLogger\demo\' }; $r=$ ...
++                     ~~~
+
+[… truncated 192800 chars …]

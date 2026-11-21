@@ -1,0 +1,60 @@
+/**
+ * @file    isc_internal.h
+ * @brief   ISC 模块内部定义 (仅 isc_core.c 及传感器驱动 .c 引用)
+ * @details 包含 isc_dev_t 完整结构体、状态枚举。
+ *          控制值的缓存策略由各传感器驱动自行决定。
+ *          驱动可通过 dev->driver_priv 关联私有数据。
+ *
+ *          传感器驱动通过 `dev->port` / `dev->fpga_ops` 访问平台接口,
+ *          这是刻意的架构权衡 — 在不透明指针封装与嵌入式零开销之间取平衡。
+ *          驱动不可直接访问 isc_core.c 中的全局设备表 (g_devs[] 等)。
+ */
+
+#ifndef ISC_INTERNAL_H
+#define ISC_INTERNAL_H
+
+#include "isc.h"
+
+/* ──── 设备状态枚举 ──── */
+typedef enum {
+    ISC_STATE_FREE       = 0,   /**< 设备槽空闲 (g_devs[] 初始/关闭后状态)         */
+    ISC_STATE_OPEN       = 1,   /**< 传感器已识别、可配置                           */
+    ISC_STATE_STREAMING  = 2,   /**< 传感器正在输出 LVDS 数据                       */
+} isc_state_t;
+
+
+/* ──── 传感器设备实例 ──── */
+struct isc_dev_t {
+    /* 身份 */
+    const isc_sensor_ops_t *ops;            /**< 传感器驱动 ops 表                  */
+    uint8_t                 sensor_idx;     /**< 在全局传感器表中的索引              */
+    isc_state_t             state;          /**< 当前状态                           */
+
+    /* 平台接口 (从 isc_init 继承) */
+    const isc_port_t       *port;           /**< 传感器通信原语                      */
+    const isc_fpga_ops_t   *fpga_ops;       /**< FPGA 同步接口                       */
+
+    /* 格式 */
+    isc_fmt_t               current_fmt;    /**< 当前生效格式 (含 crop)              */
+    uint32_t                cached_caps;    /**< 能力位图快照 (isc_open 时探测一次)  */
+
+    /* 控制 */
+    uint32_t                last_ctrl_cid;  /**< isc_query_next_ctrl 枚举游标       */
+
+    /* 回调 */
+    isc_on_ctrl_change_t    on_ctrl_change; /**< 控制变更通知 (可选)                 */
+    void                   *cb_user_data;   /**< 回调用户数据                        */
+    isc_on_error_t          on_error;       /**< 预留: 异步异常通知 (需硬件中断+轮询线程配合) */
+    void                   *err_user_data;  /**< 异常回调用户数据                     */
+
+    /* 驱动私有数据 */
+    void                   *driver_priv;    /**< 驱动自行管理的私有数据指针(init 赋值, deinit 清零) */
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * 注: 全局状态 (g_*) 仅在 isc_core.c 中定义为 static 变量。
+ * 传感器驱动通过 dev->port / dev->fpga_ops 访问平台接口，
+ * 不可直接访问全局设备表。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+#endif /* ISC_INTERNAL_H */
