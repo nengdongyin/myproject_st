@@ -31,20 +31,37 @@
  *       `MX_USART3_UART_Init()` 里配; 运行时改速走 `bsp_uart_set_baudrate()`。
  */
 
-#include "app_config.h"
 #include "init_thread.h"
 #include "bsp_uart.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
+/* ================================================================
+ *  init 任务的启动参数 (config.h 可覆盖)
+ *
+ *  只归本文件用: 任务就在下面创建。没必要的共享头文件一概不建 ——
+ *  两个文件各用自己的宏, 就不存在“同一个旋钮两份定义、改一处静默失效”。
+ * ================================================================ */
+
+/** @brief init 任务栈 (字节)。装配期一次性使用, 任务自删后归还堆 */
+#ifndef INIT_STACK_SIZE
+#define INIT_STACK_SIZE 8192
+#endif
+
+/** @brief init 任务优先级。FreeRTOS 数值越大越高, 取值 0..55 */
+#ifndef INIT_TASK_PRIORITY
+#define INIT_TASK_PRIORITY 7
+#endif
+
+/** @brief 字节 → FreeRTOS 的字 (4 字节)
+ *  @note INIT_STACK_SIZE 的单位是**字节**, 而 xTaskCreate 的深度单位是**字**。 */
+#define APP_STACK_WORDS(bytes) ((uint32_t)((bytes) / (uint32_t)sizeof(uint32_t)))
+
 /*
  * init 任务用**动态**分配（xTaskCreate）：它在装配完成后 vTaskDelete(NULL)
  * 退出，栈与 TCB 由空闲任务归还给 FreeRTOS 堆，可被后续分配复用。
- * 静态分配的话这 4KB 会永久占用（vTaskDelete 不释放静态栈）—— 详见文件头说明。
- *
- * 注意 APP_STACK_WORDS(): INIT_STACK_SIZE 的单位是**字节**，
- * 而 xTaskCreate 的深度单位是**字**。
+ * 静态分配的话这 8KB 会永久占用（vTaskDelete 不释放静态栈）—— 详见文件头说明。
  */
 
 void app_start(void)
@@ -65,7 +82,7 @@ void app_start(void)
 
     rc = xTaskCreate(init_thread_entry, "init",
                      APP_STACK_WORDS(INIT_STACK_SIZE), NULL,
-                     (UBaseType_t)THREAD_PRIORITY, NULL);
+                     (UBaseType_t)INIT_TASK_PRIORITY, NULL);
     if (rc != pdPASS)
     {
         /* 堆不足：继续启动调度器只会得到一个空跑的系统，

@@ -21,7 +21,7 @@
 
 #include "shell_api.h"
 #include "shell_parse.h"
-#include "app_config.h"
+#include "protocol_chain_init.h" /* protocol_chain_is_up() */
 #include "file_transfer.h"
 #include "param_dump.h"
 
@@ -47,7 +47,7 @@ static const char *ft_state_name(ft_state_t state)
 }
 
 /**
- * @brief status —— 打印累计接收字节数 / 协议链状态 / 文件传输会话状态
+ * @brief status —— 打印协议链状态 / 文件传输会话状态
  *
  * @note 命令名用 `status` 而不是 `stat`: `stat` 已被 core/vfs/vfs_shell.c 的
  *       文件 stat 占用, 两处同名会在链接期重复定义 `shellCmd_stat`
@@ -57,12 +57,11 @@ static const char *ft_state_name(ft_state_t state)
  */
 static int shell_cmd_status(void)
 {
-    shell_printf("rx bytes : %u\r\n", (unsigned)app_ctx.total_rx_bytes);
-    shell_printf("chain    : %s\r\n", app_ctx.chain ? "up" : "down");
+    shell_printf("chain    : %s\r\n", protocol_chain_is_up() ? "up" : "down");
     shell_printf("ft state : %s\r\n", ft_state_name(file_transfer_get_state()));
     return 0;
 }
-SHELL_CMD(status, shell_cmd_status, show rx and file-transfer status);
+SHELL_CMD(status, shell_cmd_status, show chain and file-transfer status);
 
 /**
  * @brief dump —— 打印参数系统的当前值

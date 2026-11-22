@@ -111,8 +111,8 @@
  *    VFS_ENABLE_SHELL / VFS_SH_CAT_MAX / VFS_MAX_OPEN_FILES ...
  *  串口/协议 (platform/bsp/bsp_uart.c, core/file_transfer)
  *    BSP_UART_PIPE_SIZE / BSP_UART_RX_CHUNK ...
- *  应用      (app/init/app_config.h)
- *    STACK_SIZE / INIT_STACK_SIZE / THREAD_PRIORITY / *_BUF_SIZE ...
+ *  应用      (src/app/main.c、src/app/init/init_thread.c)
+ *    INIT_STACK_SIZE / INIT_TASK_PRIORITY / STACK_SIZE / PARSER_TASK_PRIORITY
  * ================================================================ */
 
 /* ================================================================

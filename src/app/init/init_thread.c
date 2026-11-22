@@ -4,19 +4,37 @@
 
 #include "init_thread.h"
 #include "protocol_parser_thread.h"
-#include "app_config.h"
 #include "boot_stage.h" /* 启动阶段日志: [BOOT n/7] 前缀 */
 #include "bsp_uart.h"
 #include "log_init.h"   /* 日志子系统装配 (第 3 步) */
 #include "shell_init.h" /* shell 子系统装配 (最后一步) */
 #include "protocol_chain_init.h"
-#include "file_storage_init.h"
+#include "filesystem_init.h"
 #include "param_manager_init.h"
 #include "port.h"
 #include "log_api.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
+
+/* ================================================================
+ *  协议解析任务的启动参数 (config.h 可覆盖)
+ *
+ *  只归本文件用: 任务就在这里创建。
+ * ================================================================ */
+
+/** @brief 解析任务栈 (字节)。常驻任务, 永久占用堆 */
+#ifndef STACK_SIZE
+#define STACK_SIZE 4096
+#endif
+
+/** @brief 解析任务优先级。FreeRTOS 数值越大越高, 取值 0..55 */
+#ifndef PARSER_TASK_PRIORITY
+#define PARSER_TASK_PRIORITY 7
+#endif
+
+/** @brief 字节 → FreeRTOS 的字 (4 字节) */
+#define APP_STACK_WORDS(bytes) ((uint32_t)((bytes) / (uint32_t)sizeof(uint32_t)))
 
 /* ── 相机 / VSC 管线（当前不参与编译，头文件保留以便后续接回） ──
  * 注意：这些头只提供声明，对应的 .c 在 .cproject 里被排除，
@@ -29,8 +47,6 @@
 #include "sensor_vsc.h"
 #include "sensor_imx296_vsc.h"
 #include "vsc_lite_board.h"
-
-#include <string.h>
 
 /*
  * 协议解析任务的栈与 TCB 用**动态**分配（xTaskCreate），栈来自 FreeRTOS 堆
@@ -53,17 +69,13 @@
  * @note 栈深度用 APP_STACK_WORDS() 把 STACK_SIZE（字节）换成字。
  */
 
-app_ctx_t app_ctx;
-
 extern void app_sensor_demo(void);
 
 void init_thread_entry(void *arg)
 {
     (void)arg;
 
-    app_ctx_t *ctx = &app_ctx;
-
-    memset(ctx, 0, sizeof(app_ctx_t));
+    /* 本任务只做装配: 内部状态全在各自模块里, 没有应用级上下文要清。 */
 
     /* ================================================================
      *  装配顺序表 (改顺序前请逐条确认)
@@ -115,13 +127,13 @@ void init_thread_entry(void *arg)
     }
 
     /* 4) 协议链 (内部逐条报告: ymodem / imperx / camyu) */
-    if (!protocol_chain_init(ctx))
+    if (!protocol_chain_init())
     {
         goto exit_task;
     }
 
     /* 5) 存储挂载 (内部逐卷报告: /lfs、/raw 及跳过项) */
-    if (!file_storage_init(ctx))
+    if (!filesystem_init())
     {
         goto fail_fp;
     }
@@ -140,10 +152,12 @@ void init_thread_entry(void *arg)
 
     /* 7) 协议解析任务 —— 最后一个起来，它消费第 2 步开始灌入的字节。
           动态分配（与 init 任务一致）：栈与 TCB 来自 FreeRTOS 堆，不占 .bss。
+          链对象经 pvParameters 传给它 —— 比再开一个全局句柄干净。
           创建失败通常是堆不足 —— 打日志而不静默继续，否则系统“跑着但不收数据”。 */
     if (xTaskCreate(protocol_parser_thread_entry, "proto",
-                    APP_STACK_WORDS(STACK_SIZE), NULL,
-                    (UBaseType_t)THREAD_PRIORITY, NULL) != pdPASS)
+                    APP_STACK_WORDS(STACK_SIZE),
+                    (void *)protocol_chain_handle(),
+                    (UBaseType_t)PARSER_TASK_PRIORITY, NULL) != pdPASS)
     {
         boot_stage_fail(BOOT_STEP_TASK,
                         "task: protocol parser create failed (heap too small?)");
@@ -151,7 +165,7 @@ void init_thread_entry(void *arg)
     else
     {
         boot_stage(BOOT_STEP_TASK, "task: protocol parser started (prio %u, stack %u B)",
-                   (unsigned)THREAD_PRIORITY, (unsigned)STACK_SIZE);
+                   (unsigned)PARSER_TASK_PRIORITY, (unsigned)STACK_SIZE);
     }
 
     boot_stage_done();
@@ -169,7 +183,7 @@ void init_thread_entry(void *arg)
     goto exit_task;
 
 fail_fp:
-    protocol_chain_cleanup(ctx);
+    protocol_chain_cleanup();
 
 exit_task:
     /* FreeRTOS 的任务函数**不允许 return**（会跳到非法地址）。

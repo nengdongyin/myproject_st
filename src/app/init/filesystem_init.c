@@ -2,7 +2,7 @@
  *  @note 必须定在 `#include "log_api.h"` 之前。 */
 #define LOG_TAG "fs"
 
-#include "file_storage_init.h"
+#include "filesystem_init.h"
 #include "storage_config.h"
 #include "boot_stage.h" /* 启动阶段日志: [BOOT 5/7] 前缀 */
 #include "log_api.h" /* 日志门面: LOG_I/W/E + tag */
@@ -14,10 +14,8 @@
  * 每次传输时按需 open/close, 这里不预置任何 fd 或默认文件名 ——
  * 传输目标由参数 PID_FT_RECV_PATH / PID_FT_SEND_PATH 决定。
  */
-bool file_storage_init(app_ctx_t *ctx)
+bool filesystem_init(void)
 {
-    (void)ctx;
-
     int rc = storage_config_init();
     if (rc != 0)
     {
@@ -64,8 +62,7 @@ bool file_storage_init(app_ctx_t *ctx)
     return true;
 }
 
-void file_storage_deinit(app_ctx_t *ctx)
+void filesystem_deinit(void)
 {
-    (void)ctx;
     storage_config_deinit();
 }

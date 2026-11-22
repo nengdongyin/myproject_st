@@ -17,7 +17,7 @@
  *     一次 open/close —— 后端是缓冲输出 (ELOG_BUF_OUTPUT), 一段通常上千
  *     字节, 开销可忽略。
  *   - **懒打开 + 失败节流**: 日志初始化早于文件系统挂载 (本工程
- *     log_init() 在 file_storage_init() 之前), 一次性失败会丢掉整段启动
+ *     log_init() 在 filesystem_init() 之前), 一次性失败会丢掉整段启动
  *     日志, 因此首次失败后按 LOG_FILE_RETRY_MS 重试而非永久放弃。
  */
 

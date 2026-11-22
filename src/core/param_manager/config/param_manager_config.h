@@ -30,7 +30,7 @@ extern "C" {
  *  1=开 0=关。关闭时 param_dump()/param_dump_entry() 为空操作宏，
  *  整个 param_dump.c 不参与编译，避免拉入 stdio 库。 */
 #ifndef PARAM_DUMP_ENABLE
-#define PARAM_DUMP_ENABLE 0
+#define PARAM_DUMP_ENABLE 1
 #endif
 /** @brief 启用 linker-section 自动模块注册
  *  1=开 0=关。开启后 param_modules_register_all() 遍历 .rodata.param_modules 段 */

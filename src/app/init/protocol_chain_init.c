@@ -3,6 +3,8 @@
 #define LOG_TAG "proto"
 
 #include "protocol_chain_init.h"
+#include "protocol_parser_imperx.h" /* imperx_protocol_parser_t */
+#include "protocol_parser_camyu.h"  /* camyu_protocol_parser_t */
 #include "boot_stage.h" /* 启动阶段日志: [BOOT 4/7] 前缀 */
 #include "log_api.h" /* 日志门面: LOG_I/W/E + tag，不直接依赖任何日志库头 */
 #include "imperx_cmd_map.h"
@@ -23,6 +25,57 @@
      - 串口设备/波特率/中断/三路出口  → platform/bsp/bsp_uart.c
      - param_dump 输出 / 日志 / md-mw 白名单 → app/init/log_init.c、shell_init.c
      - 装配顺序                        → init_thread.c (唯一的顺序表) */
+
+/* ================================================================
+ *  解析器收发缓存
+ *
+ *  谁创建解析器实例, 谁持有它的内存: 这四块缓存只在下面两处
+ *  imperx_protocol_create() / camyu_protocol_create() 各引用一次,
+ *  解析器实例与协议链同寿命 (上电建, 运行期不重建), 因此用静态数组,
+ *  收在本模块里 —— 谁也不需要在别处直接读它们。
+ *
+ *  @note 尺寸宏也写在这里: 它们是本模块的内部细节。仍保留 #ifndef 守卫,
+ *        config.h 可照常覆盖。
+ * ================================================================ */
+
+#ifndef IMPERX_RX_BUF_SIZE
+#define IMPERX_RX_BUF_SIZE 32
+#endif
+
+#ifndef IMPERX_TX_BUF_SIZE
+#define IMPERX_TX_BUF_SIZE 32
+#endif
+
+#ifndef CAMYU_RX_BUF_SIZE
+#define CAMYU_RX_BUF_SIZE 320
+#endif
+
+#ifndef CAMYU_TX_BUF_SIZE
+#define CAMYU_TX_BUF_SIZE 320
+#endif
+
+static uint8_t s_imperx_rx_buf[IMPERX_RX_BUF_SIZE];
+static uint8_t s_imperx_tx_buf[IMPERX_TX_BUF_SIZE];
+static uint8_t s_camyu_rx_buf[CAMYU_RX_BUF_SIZE];
+static uint8_t s_camyu_tx_buf[CAMYU_TX_BUF_SIZE];
+
+/* ================================================================
+ *  内部上下文
+ *
+ *  链对象 + 两个解析器实例。三者同寿命 (上电建, 拆卸时一起释放),
+ *  外部无任何写入需求 —— 所以不导出结构体, 只在本文件定义。
+ *  静态存储已由启动代码清零, 无需 memset。
+ * ================================================================ */
+
+typedef struct
+{
+    protocol_chain *chain;
+
+    imperx_protocol_parser_t *imperx_parser;
+    camyu_protocol_parser_t *camyu_parser;
+} protocol_chain_ctx_t;
+
+static protocol_chain_ctx_t s_ctx;
 
 /** @brief 各协议共用的发送就绪回调 (协议帧出口, 不做任何模式判断) */
 static void on_tx_ready(protocol_parser_t *parser, void *user_ctx)
@@ -133,8 +186,10 @@ static void camyu_on_frame_ready(protocol_parser_t *parser,
  *  装配
  * ================================================================ */
 
-bool protocol_chain_init(app_ctx_t *ctx)
+bool protocol_chain_init(void)
 {
+    protocol_chain_ctx_t *ctx = &s_ctx;
+
     ctx->chain = protocol_chain_create(4); /* ymodem×2 + imperx + camyu */
     if (!ctx->chain)
     {
@@ -161,8 +216,8 @@ bool protocol_chain_init(app_ctx_t *ctx)
 
     /* ---- Imperx ---- */
     ctx->imperx_parser = imperx_protocol_create(
-        ctx->imperx_rx_buf, sizeof(ctx->imperx_rx_buf),
-        ctx->imperx_tx_buf, sizeof(ctx->imperx_tx_buf));
+        s_imperx_rx_buf, sizeof(s_imperx_rx_buf),
+        s_imperx_tx_buf, sizeof(s_imperx_tx_buf));
     if (!ctx->imperx_parser)
     {
         boot_stage_fail(BOOT_STEP_PROTO, "proto: imperx parser create failed");
@@ -176,8 +231,8 @@ bool protocol_chain_init(app_ctx_t *ctx)
 
     /* ---- Camyu ---- */
     ctx->camyu_parser = camyu_protocol_create(
-        ctx->camyu_rx_buf, sizeof(ctx->camyu_rx_buf),
-        ctx->camyu_tx_buf, sizeof(ctx->camyu_tx_buf));
+        s_camyu_rx_buf, sizeof(s_camyu_rx_buf),
+        s_camyu_tx_buf, sizeof(s_camyu_tx_buf));
     if (!ctx->camyu_parser)
     {
         boot_stage_fail(BOOT_STEP_PROTO, "proto: camyu parser create failed");
@@ -203,8 +258,9 @@ fail_ft:
     return false;
 }
 
-void protocol_chain_cleanup(app_ctx_t *ctx)
+void protocol_chain_cleanup(void)
 {
+    protocol_chain_ctx_t *ctx = &s_ctx;
     /* 注: log/shell 的装配与拆卸属于各自的组件 (app/init/log_init.c、
        shell_init.c), 由编排层 init_thread.c 决定时点 —— 本函数只管协议链。
        销毁顺序必须与创建相反: 先 detach 组件 (remove_parser 需要 chain 存活,
@@ -226,4 +282,18 @@ void protocol_chain_cleanup(app_ctx_t *ctx)
         protocol_chain_destroy(ctx->chain);
         ctx->chain = NULL;
     }
+}
+
+/* ================================================================
+ *  对外访问点
+ * ================================================================ */
+
+protocol_chain *protocol_chain_handle(void)
+{
+    return s_ctx.chain;
+}
+
+bool protocol_chain_is_up(void)
+{
+    return s_ctx.chain != NULL;
 }

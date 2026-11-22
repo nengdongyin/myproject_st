@@ -146,7 +146,7 @@ int main(void)
   /* 应用侧的 init 任务（xTaskCreate 动态分配：栈与 TCB 来自 FreeRTOS 堆）。
      放在 osKernelInitialize() 之后、osKernelStart() 之前创建：此时 CMSIS 内核
      状态已为 KernelReady，语义正确；且本块是 CubeMX 保留的 USER CODE，
-     重新生成代码不会丢失。实现在 src/app/main.c，栈/优先级见 app_config.h。 */
+     重新生成代码不会丢失。实现在 src/app/main.c，栈/优先级也在那里定义。 */
   app_start();
   /* USER CODE END RTOS_THREADS */
 

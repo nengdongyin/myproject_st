@@ -76,7 +76,7 @@ typedef struct
    交给 vfs_close(), 误关别人的文件 */
 static file_transfer_t g_ft = { .fd = VFS_FD_INVALID };
 
-/* 收发缓冲区: 从 app_config.h 迁入, 静态零堆。
+/* 收发缓冲区: 静态数组, 零堆。
    接收器: 大 rx + 4B 应答 tx; 发送器: 4B 虚拟 rx + 大 tx。 */
 static uint8_t s_recv_rx[YMODEM_STX_FRAME_LEN_BYTE]; /**< 1029 */
 static uint8_t s_recv_tx[4];

@@ -3,7 +3,7 @@
 #define LOG_TAG "rx"
 
 #include "protocol_parser_thread.h"
-#include "app_config.h"
+#include "protocol_chain.h" /* protocol_chain_feed / check_timeout_poll */
 #include "bsp_uart.h" /* bsp_uart_read(): 接收缓冲由 bsp 提供 */
 #include "ymodem_common.h"
 #include "file_transfer.h"
@@ -18,9 +18,8 @@
 uint8_t data_buf[YMODEM_STX_FRAME_LEN_BYTE];
 void protocol_parser_thread_entry(void *arg)
 {
-    (void)arg;
+    protocol_chain *chain = (protocol_chain *)arg;
 
-    app_ctx_t *ctx = &app_ctx;
     for (;;)
     {
         int n;
@@ -39,8 +38,6 @@ void protocol_parser_thread_entry(void *arg)
 
         if (n > 0)
         {
-            ctx->total_rx_bytes += (uint32_t)n;
-
             /* 通信串口是时分复用: 同一批字节只能交给一个消费者。
                shell 模式下 shellHandler 逐字节解析并回显, 再喂协议链就会
                同时踩回显污染 / 0x0A 触发命令行执行 / 0x52,0x57 撞 Imperx 帧头。 */
@@ -50,14 +47,14 @@ void protocol_parser_thread_entry(void *arg)
             }
             else
             {
-                (void)protocol_chain_feed(ctx->chain, data_buf, (uint32_t)n);
+                (void)protocol_chain_feed(chain, data_buf, (uint32_t)n);
             }
         }
         else
         {
             /* 协议超时重传 / 握手重试 / 会话收尾全部由各 parser 的 poll 钩子
                驱动, file_transfer 组件不参与本循环的任何调度。 */
-            protocol_chain_check_timeout_poll(ctx->chain);
+            protocol_chain_check_timeout_poll(chain);
         }
     }
 }
