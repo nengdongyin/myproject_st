@@ -13,7 +13,7 @@
  * 触发级联写入导致栈溢出。
  */
 
-/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点不再逐条写)
+/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点无需逐条写)
  *  @note 必须定在 `#include "log_api.h"` 之前。 */
 #define LOG_TAG "param"
 
@@ -22,7 +22,7 @@
 #include <string.h>
 #include "param_manager.h"
 #include "param_boot.h"
-#include "log_api.h" /* dump 输出接日志门面 (不直接用 Zephyr log.h) */
+#include "log_api.h" /* dump 输出接日志门面 */
 #include "lwevt/lwevt.h"
 #include "param_storage_flashdb.h"
 #include "param_storage_iniparser.h"
@@ -41,12 +41,10 @@
  *
  * @note 为何注册在*本文件*而不是日志装配 (app/init/log_init.c):
  *       `param_dump()` 的**第一个调用者就是本文件的 `param_manager_init()` 尾部**
- *       (启动后整表 dump), 所以这条接线属于参数子系统自己的配置。放在这里后,
- *       “谁先谁后”不再影响 dump 是否能输出 —— 原先放在 log_init 的旧身
- *       (diag_init) 里时,
- *       一旦两者顺序被调换, 启动 dump 就会被静默丢掉。
+ *       (启动后整表 dump), 所以这条接线属于参数子系统自己的配置 —— 注册点与
+ *       使用点同在, 不受装配顺序影响。
  * @note 走 `LOG_I` 而非 `printf`: printf 直写 console, 会绕开 app 层的出口选路
- *       (app/init/log_init.c 的 log_tx, 协议模式下不该往通讯口写东西)。
+ *       (app/init/log_init.c 的 log_tx, 协议模式下日志不进通讯口)。
  */
 static void dump_to_log(const char *line, void *user_data)
 {

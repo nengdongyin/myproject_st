@@ -1,4 +1,4 @@
-/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点不再逐条写)
+/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点无需逐条写)
  *  @note 必须定在 `#include "log_api.h"` 之前。 */
 #define LOG_TAG "proto"
 
@@ -12,15 +12,14 @@
 #include "file_transfer.h"
 #include "bsp_uart.h" /* bsp_comm_write: 协议帧出口 */
 
-/* 原 Zephyr 版是 LOG_MODULE_REGISTER(chain_test, LOG_LEVEL_DBG);
-   改用 log_api.h 的 tag 机制: 每个调用点自带 "proto" 标签 */
+/* 日志标签用 log_api.h 的 tag 机制: 本文件的调用点自带 "proto" 标签 */
 
-/* shell 的字节入口不走协议透传帧了: 通信串口由 core/console 的 console_mode
+/* shell 的字节入口不走协议透传帧: 通信串口由 core/console 的 console_mode
    在“协议解析 / shell”之间时分复用 (WRITE 0xF003 切 shell, shell 内
    `uart_mode proto` 切回)。
 
-   本文件的职责只剩"协议链": 建链 → 挂 ymodem → 建/挂 imperx、camyu (+各自
-   回调) → 拆卸。以下三件事**不在这里** (曾在, 已拆走):
+   本文件的职责只有"协议链": 建链 → 挂 ymodem → 建/挂 imperx、camyu (+各自
+   回调) → 拆卸。以下三件事不在这里:
      - 串口设备/波特率/中断/三路出口  → platform/bsp/bsp_uart.c
      - param_dump 输出 / 日志 / md-mw 白名单 → app/init/log_init.c、shell_init.c
      - 装配顺序                        → init_thread.c (唯一的顺序表) */
@@ -208,8 +207,8 @@ void protocol_chain_cleanup(app_ctx_t *ctx)
 {
     /* 注: log/shell 的装配与拆卸属于各自的组件 (app/init/log_init.c、
        shell_init.c), 由编排层 init_thread.c 决定时点 —— 本函数只管协议链。
-       组件必须先拆: remove_parser 需要 chain 存活, 且会顺手清掉链上的锁定。
-       现有顺序是 destroy chain → destroy parser, 这里必须反过来。 */
+       销毁顺序必须与创建相反: 先 detach 组件 (remove_parser 需要 chain 存活,
+       且会顺手清掉链上的锁定), 再 destroy 各 parser, 最后 destroy chain。 */
     file_transfer_detach();
 
     if (ctx->imperx_parser)

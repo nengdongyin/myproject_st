@@ -8,7 +8,7 @@
  * 打印"我是第几步"会把顺序表复制 N 份 —— 改一次顺序要改 N 个文件。
  * 本模块只负责**统一前缀**: 步骤号; 内容由调用方给。
  * 时间戳**不在这里**—— elog 行首的 `[hh:mm:ss.mmm]` 已经带了 (见
- * core/log/log_elog_port.c 的 elog_port_get_time), 同一份数据不再写第二遍。
+ * core/log/log_elog_port.c 的 elog_port_get_time), 同一份数据不重复写。
  *
  * @par 输出形如
  * @code

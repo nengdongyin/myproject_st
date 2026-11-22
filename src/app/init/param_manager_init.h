@@ -27,7 +27,7 @@
  *   7. param_validate_all() 裁剪超范围值
  *   8. param_flush() 刷入硬件
  *
- * @note 内部调用 printf 输出调试信息，适合开发阶段使用。
- *       生产环境建议替换为日志系统或条件编译关闭。
+ * @note 输出走日志门面 (LOG_I + param_dump_set_output), 不直接 printf，
+ *       因此受 app 层出口选路 (app/init/log_init.c 的 log_tx) 约束。
  */
 void param_manager_init(void);

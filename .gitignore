@@ -1,1 +1,2 @@
-Debug
+# 仅忽略仓库根的构建输出目录（前导 / 锚定；不加会连 src/core/debug 一起忽略）
+/Debug/

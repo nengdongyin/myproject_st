@@ -1,4 +1,4 @@
-/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点不再逐条写)
+/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点无需逐条写)
  *  @note 必须定在 `#include "log_api.h"` 之前。 */
 #define LOG_TAG "rx"
 
@@ -27,8 +27,7 @@ void protocol_parser_thread_entry(void *arg)
 
         /* ymodem 接收态: 单帧最多 1029 字节, 一次读满比逐字节读快两个数量级;
            其余状态逐字节读, 便于协议链按首字节匹配。
-           与 Zephyr 版的差异: `k_pipe_read(pipe, ...)` → `bsp_uart_read(...)`,
-           语义等价 (超时返回 0)，句柄不再泄漏到 app 层。 */
+           bsp_uart_read() 超时返回 0; 接收缓冲的句柄留在 bsp 层, 不到 app。 */
         if (file_transfer_wants_bulk_rx())
         {
             n = bsp_uart_read(data_buf, sizeof(data_buf), BSP_UART_RX_TIMEOUT_MS);

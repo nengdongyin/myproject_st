@@ -10,7 +10,7 @@
  * 出口, 抢先调用只会打到 NULL sink 上。
  */
 
-/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点不再逐条写)
+/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点无需逐条写)
  *  @note 必须定在 `#include "log_api.h"` 之前。 */
 #define LOG_TAG "log"
 
@@ -29,11 +29,9 @@
  * @brief 日志扇出出口
  *
  *  - 调试口: **恒定输出** —— 与串口模式无关, 排障时总能看到全量;
- *  - 通讯口: 目前也是恒定输出。
+ *  - 通讯口: 仅在 `CONSOLE_MODE_SHELL` 时输出 —— 协议模式下这些 ASCII 行
+ *    会被主机当成帧解析, 只能在 shell 模式下进这条线。
  *
- * @note 通讯口那一路**本该**只在 `CONSOLE_MODE_SHELL` 时输出: 协议模式下
- *       这些 ASCII 行会被主机当成帧解析。那句 `console_mode_get()` 判断现在
- *       是**有意注释掉**的 (调试期需要两个口都看到), 恢复时改本函数一处即可。
  * @note 为什么选路写在这里而不在 platform/bsp: 这里依赖 core 的 console_mode,
  *       下沉到 bsp 会形成 platform → core 的反向依赖。
  * @note 本函数与 `shell_init.c` 的 `shell_tx` 是**刻意分开的两份**, 不是漏改

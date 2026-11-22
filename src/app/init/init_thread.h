@@ -3,9 +3,8 @@
 /**
  * @brief 装配线程入口 (FreeRTOS 任务函数签名)
  *
- * @note 从 Zephyr 的 `void entry(void*, void*, void*)` 改成 FreeRTOS 的
- *       `void entry(void*)` —— `k_thread_create` 能传三个参数, `xTaskCreate`
- *       只能传一个。原实现三个参数都是 `ARG_UNUSED`, 所以丢掉两无损失。
+ * @note 单参数; 装配完成后自删除, 不 return (FreeRTOS 的任务函数 return
+ *       会跳到非法地址)。
  */
 void init_thread_entry(void *arg);
 

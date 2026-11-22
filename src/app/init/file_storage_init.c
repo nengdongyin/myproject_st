@@ -1,4 +1,4 @@
-/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点不再逐条写)
+/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点无需逐条写)
  *  @note 必须定在 `#include "log_api.h"` 之前。 */
 #define LOG_TAG "fs"
 
@@ -11,7 +11,7 @@
  * @brief 初始化并挂载所有存储卷
  *
  * 只做"存储资源就绪"。ymodem 收发的文件句柄由 file_transfer 组件在
- * 每次传输时按需 open/close, 这里不再预置任何 fd 或默认文件名 ——
+ * 每次传输时按需 open/close, 这里不预置任何 fd 或默认文件名 ——
  * 传输目标由参数 PID_FT_RECV_PATH / PID_FT_SEND_PATH 决定。
  */
 bool file_storage_init(app_ctx_t *ctx)

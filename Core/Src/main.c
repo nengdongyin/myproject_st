@@ -57,10 +57,10 @@ const osThreadAttr_t defaultTask_attributes = {
 };
 /* USER CODE BEGIN PV */
 /* defaultTask 由 CubeMX 根据 .ioc 的 FREERTOS.Tasks01 生成（osThreadNew +
-   每秒一次 printf 心跳）。应用侧真正干活的任务由 src/app/main.c 的
+   osDelay(1) 空转）。应用侧真正干活的任务由 src/app/main.c 的
    app_start() 创建。
-   如需去掉这个心跳任务：CubeMX → FreeRTOS → Tasks and Queues 里删掉
-   defaultTask 后重新生成 —— 它占的 512B 栈与每秒 printf 开销会一并消失。 */
+   如需去掉这个空转任务：CubeMX → FreeRTOS → Tasks and Queues 里删掉
+   defaultTask 后重新生成 —— 它占的 512B 栈与每毫秒唤醒一次的开销会一并消失。 */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -143,7 +143,7 @@ int main(void)
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* 应用侧的 init 任务（静态栈 + TCB）。
+  /* 应用侧的 init 任务（xTaskCreate 动态分配：栈与 TCB 来自 FreeRTOS 堆）。
      放在 osKernelInitialize() 之后、osKernelStart() 之前创建：此时 CMSIS 内核
      状态已为 KernelReady，语义正确；且本块是 CubeMX 保留的 USER CODE，
      重新生成代码不会丢失。实现在 src/app/main.c，栈/优先级见 app_config.h。 */
@@ -342,7 +342,7 @@ static void MX_GPIO_Init(void)
  * defaultTask —— CubeMX 按 .ioc 的 FREERTOS.Tasks01 生成的示例任务。
  *
  * 实际业务逻辑全部在 src/app/main.c 的 app_start() 创建的 init 任务里
- * （那个任务装配完成后会 vTaskDelete 自删）。本函数只剩每秒一次 printf，
+ * （那个任务装配完成后会 vTaskDelete 自删）。本函数只有 osDelay(1) 空转，
  * 作用就退化成“证明系统还活着”的心跳。
  *
  * 不需要的话：CubeMX → FreeRTOS → Tasks and Queues 删掉 defaultTask

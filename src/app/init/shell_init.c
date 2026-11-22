@@ -11,11 +11,10 @@
  *
  * @note 输出的公告行 (`shell: letter-shell starting`) 打在 shell_init() **之前**:
  *       shellInit() 自己会打 banner 和 `root:/$`, 若等它返回再报一句, 那句就会
- *       挂在提示符后面 (上一版 diag_init.c 就是这样, 屏幕上看到的是
- *       `root:/$ I/boot [BOOT 3/7] diag: letter-shell up`)。
+ *       挂在提示符后面。
  */
 
-/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点不再逐条写)
+/** @brief 本模块日志标签 (LOG_* 宏自动带上, 调用点无需逐条写)
  *  @note 必须定在 `#include "log_api.h"` 之前。 */
 #define LOG_TAG "shell"
 
@@ -23,7 +22,6 @@
 
 #include "boot_stage.h"   /* 启动后那一行公告 */
 #include "bsp_uart.h"     /* 两个物理口的裸写能力 (platform/bsp) */
-#include "console_mode.h" /* 通讯口那一路的模式判断要用 (见 shell_tx) */
 #include "log_api.h"      /* 门面: LOG_* */
 #include "mem_regions.h"  /* md/mw 地址白名单 (core/debug) */
 #include "shell_api.h"    /* 门面: shell_sink_set / shell_init */
@@ -36,21 +34,16 @@
  * @brief shell 扇出出口
  *
  *  - 调试口: **恒定输出** —— 敲命令那个口若被协议占着, 还能在调试口看到回显;
- *  - 通讯口: 目前也是恒定输出 (shell 模式就是从这个口进来的)。
+ *  - 通讯口: **恒定输出** —— 操作者就是在这个口上敲命令, 回显必须回到这里。
  *
- * @note 通讯口那一路的模式判断目前和 `log_init.c` 的 `log_tx` 一样是**有意
- *       注释掉**的, 恢复时两处都要改 —— 它们是刻意分开的两份策略, 见 log_tx
- *       的说明。唯一区别在本函数: shell 的输出**始终**该进通讯口, 因为操作者
- *       就是在这个口上敲命令; 真正需要按模式收窄的是日志那一路。
+ * @note 与 `log_init.c` 的 `log_tx` 是刻意分开的两份策略: 日志要按模式收窄
+ *       (协议模式下 ASCII 行会污染帧流), shell 不需要 —— 它本身就是协议流的
+ *       替代品。改一处时请顺手看一眼另一处。
  */
 static void shell_tx(const uint8_t *data, uint32_t len)
 {
     bsp_dbg_write(data, len);
-
-   // if (console_mode_get() == CONSOLE_MODE_SHELL)
-    {
-        bsp_comm_write(data, len);
-    }
+    bsp_comm_write(data, len);
 }
 
 /* ================================================================
