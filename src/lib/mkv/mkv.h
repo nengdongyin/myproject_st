@@ -7,7 +7,8 @@
  *   - 固定 4 字节整数键 (param_id)，Blob 值
  *   - 追加写 (append-only) + 双 sector 轮转 GC
  *   - 每条记录 10 字节头 + CRC16 校验
- *   - 无动态内存分配、无缓存、无遍历器
+ *   - 无待机动态内存分配: 仅 GC 期间向堆临时借一张迁移表, 用完即还
+ *   - 无缓存、无遍历器
  *   - 依赖 FAL (Flash Abstraction Layer) 进行 flash 操作
  *
  * Sector 布局 (每分区 2 个 sector):

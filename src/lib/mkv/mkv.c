@@ -9,6 +9,7 @@
 
 #include "mkv.h"
 #include "fal.h"
+#include "port.h" /* system_malloc / system_free: GC 迁移表临时申请 */
 #include <string.h>
 
 /* ═══════════════════════════════════════════════ CRC16 (CCITT-FALSE) ═══ */
@@ -267,12 +268,27 @@ static int mkv_gc(mkv_t *kv)
     uint32_t new_base = (uint32_t)new_id * kv->sector_size;
     uint32_t new_seq  = kv->active_seq + 1;
 
-    /* static: 512×8=4KB 进 BSS 不占线程栈; 容量已由 mkv_init 校验 */
-    static struct { uint32_t id; uint32_t off; } map[MKV_GC_MAP_MAX];
+    /* 迁移表 512×8 = 4KB: 只有 GC 期间需要, 所以不再占 .bss ——
+       从堆临时借, 用完即还。这 4KB 只在一次 GC 的几毫秒内被占用,
+       其余时间留在堆里给别的模块用。
+
+       申请失败就放弃本次 GC (返回 -1, 由 mkv_set 原样报给上层):
+       缩小表会在下面的 map 溢出分支里静默丢记录, 那个代价比“这一条没写进去”
+       大得多。容量已由 mkv_init() 按 sector 大小校验过。 */
+    struct gc_ent
+    {
+        uint32_t id;
+        uint32_t off;
+    } *map;
     int map_count = 0;
+    int ret = -1;
+
+    map = (struct gc_ent *)system_malloc(sizeof(*map) * (size_t)MKV_GC_MAP_MAX);
+    if (!map)
+        return -1;
 
     if (fal_partition_erase(kv->part, new_base, kv->sector_size) < 0)
-        return -1;
+        goto out;
 
     /* 扫描旧 sector, 记录每个 id 最后一次出现 */
     uint32_t scan = MKV_SEC_HDR_SIZE;
@@ -294,7 +310,7 @@ static int mkv_gc(mkv_t *kv)
         else if (map_count < MKV_GC_MAP_MAX)
             { map[map_count].id=rid; map[map_count].off=scan; map_count++; }
         else
-            return -1; /* map 溢出: mkv_init 已校验, 此处理论不可达 */
+            goto out; /* map 溢出: mkv_init 已校验, 此处理论不可达 */
 
         scan += rec_total(vlen);
     }
@@ -317,14 +333,19 @@ static int mkv_gc(mkv_t *kv)
         off += total;
     }
 
-    if (write_sec_hdr(kv, new_id, new_seq) < 0) return -1;
+    if (write_sec_hdr(kv, new_id, new_seq) < 0)
+        goto out;
 
     kv->active_base  = new_base;
     kv->active_seq   = new_seq;
     kv->write_offset = off;
 
     fal_partition_erase(kv->part, old_base, kv->sector_size);
-    return 0;
+    ret = 0;
+
+out:
+    system_free(map);
+    return ret;
 }
 
 /* ═══════════════════════════════════════════════ API ═════════════ */
