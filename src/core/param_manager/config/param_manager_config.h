@@ -64,7 +64,7 @@ extern "C" {
 
 /** @brief 选用 mkv 后端 (需把 param_storage_mkv.c 与 src/lib/mkv 编入) */
 #ifndef PARAM_MKV_ENABLE
-#define PARAM_MKV_ENABLE 1
+#define PARAM_MKV_ENABLE 0
 #endif
 
 /** @} */

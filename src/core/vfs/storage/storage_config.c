@@ -158,6 +158,7 @@ static const char *fstype_name(uint8_t fstype)
 
 /** @brief 挂载表：一行 = 一个挂载点 */
 static const vfs_mount_cfg_t s_mounts[] = {
+#if VFS_ENABLE_LFS
     {
         .mnt_point = STORAGE_MNT_FILES,
         .fstype    = VFS_FSTYPE_LITTLEFS,
@@ -165,6 +166,7 @@ static const vfs_mount_cfg_t s_mounts[] = {
         .flags     = VFS_MNT_AUTOFORMAT,
         .fs_data   = NULL,
     },
+#endif
     {
         .mnt_point = STORAGE_MNT_RAW,
         .fstype    = VFS_FSTYPE_RAWFLASH,
@@ -367,9 +369,11 @@ int storage_config_init(void)
         return rc;
 
     /* 3) 注册文件系统类型（重复注册视为可接受） */
+#if VFS_ENABLE_LFS
     rc = vfs_register(VFS_FSTYPE_LITTLEFS, &vfs_littlefs_ops);
     if (rc != 0 && rc != -EALREADY)
         return rc;
+#endif
     rc = vfs_register(VFS_FSTYPE_RAWFLASH, &vfs_rawflash_ops);
     if (rc != 0 && rc != -EALREADY)
         return rc;

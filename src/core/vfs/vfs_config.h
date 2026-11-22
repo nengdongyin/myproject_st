@@ -125,4 +125,19 @@
 #define VFS_ENABLE_FATFS          0
 #endif
 
+/**
+ * @brief littlefs 后端 (默认开: 本工程的主文件系统, /lfs 挂载点由它提供)
+ *
+ * 置 1 后把 vfs_littlefs.c 纳入构建, 并保留 storage_config 挂载表里的
+ * STORAGE_MNT_FILES (/lfs)。置 0 时该后端的整份文件与虚函数表都不参与编译,
+ * 挂载表里也不再有 littlefs 条目。
+ *
+ * @note 置 0 前先确认没人依赖 /lfs: core/log/log_file.h 的 LOG_FILE_PATH
+ *       与 core/file_transfer 的默认收发路径都以 STORAGE_MNT_FILES 为根,
+ *       这些模块必须同时关闭或改指向别的挂载点。
+ */
+#ifndef VFS_ENABLE_LFS
+#define VFS_ENABLE_LFS            1
+#endif
+
 #endif /* VFS_CONFIG_H */

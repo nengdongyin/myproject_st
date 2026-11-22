@@ -22,7 +22,7 @@
 #include "log_api.h"
 #include "log_file.h"
 #include "port.h"
-
+#if LOG_BACKEND_EASYLOGGER
 /* 输出 sink: 由 log_sink_set() 注入; 未注入时静默丢弃(不死机) */
 static log_sink_fn s_sink = NULL;
 
@@ -145,3 +145,4 @@ const char *elog_port_get_t_info(void)
 {
     return "";   /* 输出即当前上下文, 无额外线程信息 */
 }
+#endif/*LOG_BACKEND_EASYLOGGER*/

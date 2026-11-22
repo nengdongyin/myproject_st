@@ -127,4 +127,22 @@
  *  校验脚本 tools/check_config_overlay.py 会拒绝这些名字。
  * ================================================================ */
 
+#define VFS_ENABLE_LFS            0
+#define SHELL_BACKEND_LETTER 	  0
+#define LOG_BACKEND_EASYLOGGER    0
+/** @brief 选用 FlashDB 后端 (需把 param_storage_flashdb.c 与 flashdb 库编入) */
+#ifndef PARAM_FLASHDB_ENABLE
+#define PARAM_FLASHDB_ENABLE 0
+#endif
+
+/** @brief 选用 iniparser 后端 (需把 param_storage_iniparser.c 与 iniparser 库编入) */
+#ifndef PARAM_INIPARSER_ENABLE
+#define PARAM_INIPARSER_ENABLE 0
+#endif
+
+/** @brief 选用 mkv 后端 (需把 param_storage_mkv.c 与 src/lib/mkv 编入) */
+#ifndef PARAM_MKV_ENABLE
+#define PARAM_MKV_ENABLE 1
+#endif
+
 #endif /* PROJECT_CONFIG_H */

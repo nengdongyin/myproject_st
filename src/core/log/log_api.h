@@ -60,9 +60,8 @@ typedef void (*log_sink_fn)(const uint8_t *data, uint32_t len);
  *  后端选择
  * ================================================================ */
 
-#if !defined(LOG_BACKEND_EASYLOGGER) && !defined(LOG_BACKEND_RXI) && \
-    !defined(LOG_BACKEND_NONE)
-    #define LOG_BACKEND_EASYLOGGER 1
+#ifndef	LOG_BACKEND_EASYLOGGER
+    #define LOG_BACKEND_EASYLOGGER 0
 #endif
 
 /* ================================================================
@@ -72,7 +71,7 @@ typedef void (*log_sink_fn)(const uint8_t *data, uint32_t len);
  *  应用层无需 #if 保护即可无条件调用 log_init() / log_sink_set()。
  * ================================================================ */
 
-#if defined(LOG_BACKEND_EASYLOGGER)
+#if LOG_BACKEND_EASYLOGGER
     void log_sink_set(log_sink_fn fn);
     int  log_init(void);
 #else
@@ -104,7 +103,7 @@ typedef void (*log_sink_fn)(const uint8_t *data, uint32_t len);
 #define LOG_TAG "app"
 #endif
 
-#if defined(LOG_BACKEND_EASYLOGGER)
+#if LOG_BACKEND_EASYLOGGER
     /* ---- EasyLogger (带 tag 过滤) ---- */
     #include <elog.h>
     #define LOG_A(...)      elog_a(LOG_TAG, __VA_ARGS__)

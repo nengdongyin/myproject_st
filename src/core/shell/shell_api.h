@@ -124,7 +124,7 @@ extern "C" {
  * ================================================================ */
 
 #ifndef SHELL_BACKEND_LETTER
-    #define SHELL_BACKEND_LETTER 1
+    #define SHELL_BACKEND_LETTER 0
 #endif
 
 /* ================================================================
@@ -208,6 +208,7 @@ typedef void (*shell_sink_fn)(const uint8_t *data, uint32_t len);
     /* ---- 关 shell: 全部编译为空 ----
      * 命令注册宏在文件作用域使用, 必须展开为空 (而非 ((void)0) 表达式),
      * 与 letter-shell 自身 SHELL_USING_CMD_EXPORT=0 分支的空宏一致。 */
+	#define SHELL_BACKEND_NONE 								1
     #define SHELL_CMD(_name, _func, _desc)
     #define SHELL_CMD_MAIN(_name, _func, _desc)
     #define SHELL_VAR_INT(_name, _var, _desc)

@@ -19,6 +19,9 @@
 #define VFS_LITTLEFS_H
 
 #include "vfs.h"
+#include "vfs_config.h"
+
+#if VFS_ENABLE_LFS
 
 #ifdef __cplusplus
 extern "C"
@@ -76,5 +79,7 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* VFS_ENABLE_LFS */
 
 #endif /* VFS_LITTLEFS_H */

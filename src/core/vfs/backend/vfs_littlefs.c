@@ -7,6 +7,9 @@
  */
 
 #include "vfs_littlefs.h"
+
+#if VFS_ENABLE_LFS
+
 #include <lfs.h>
 #include <string.h>
 #include <errno.h>
@@ -635,3 +638,5 @@ const vfs_fs_ops_t vfs_littlefs_ops = {
     .closedir = NULL,
 #endif
 };
+
+#endif /* VFS_ENABLE_LFS */
