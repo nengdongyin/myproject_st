@@ -189,6 +189,20 @@ int port_thread_stat(size_t idx, port_thread_info_t *out)
 
 #endif /* configUSE_TRACE_FACILITY */
 
+/**
+ * @brief 堆快照 —— heap_4 的水位 API 不依赖 TRACE_FACILITY, 无条件可用
+ */
+int port_heap_info(port_heap_info_t *out)
+{
+    if (out == NULL)
+        return -EINVAL;
+
+    out->total    = (uint32_t)configTOTAL_HEAP_SIZE;
+    out->free     = (uint32_t)xPortGetFreeHeapSize();
+    out->min_free = (uint32_t)xPortGetMinimumEverFreeHeapSize();
+    return 0;
+}
+
 #elif PORT_OS_ZEPHYR
 
 /* ================================================================
@@ -338,6 +352,13 @@ int port_thread_stat(size_t idx, port_thread_info_t *out)
 
 #endif /* CONFIG_THREAD_MONITOR && CONFIG_INIT_STACKS && CONFIG_THREAD_STACK_INFO */
 
+/* Zephyr 的系统堆尺寸/水位未在本层封装: 不提供 */
+int port_heap_info(port_heap_info_t *out)
+{
+    (void)out;
+    return -ENOTSUP;
+}
+
 #elif PORT_OS_RTTHREAD
 
 /* ================================================================
@@ -432,6 +453,13 @@ int port_thread_stat(size_t idx, port_thread_info_t *out)
     return -ENOTSUP;
 }
 
+/* 同上: 堆水位未在本层封装 */
+int port_heap_info(port_heap_info_t *out)
+{
+    (void)out;
+    return -ENOTSUP;
+}
+
 #elif PORT_OS_LIBC
 
 /* ================================================================
@@ -509,6 +537,13 @@ void sys_mutex_unlock(sys_mutex_t *m)  { (void)m; }
 int port_thread_stat(size_t idx, port_thread_info_t *out)
 {
     (void)idx;
+    (void)out;
+    return -ENOTSUP;
+}
+
+/* 无 RTOS: 堆就是 libc 堆, 本层不给尺寸/水位 */
+int port_heap_info(port_heap_info_t *out)
+{
     (void)out;
     return -ENOTSUP;
 }

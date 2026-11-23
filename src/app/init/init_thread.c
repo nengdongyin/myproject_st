@@ -188,5 +188,8 @@ fail_fp:
 exit_task:
     /* FreeRTOS 的任务函数**不允许 return**（会跳到非法地址）。
        装配完成后本任务无事可做，自删除。 */
-    vTaskDelete(NULL);
+	while(1){
+		vTaskDelay(100);
+	}
+    //vTaskDelete(NULL);
 }

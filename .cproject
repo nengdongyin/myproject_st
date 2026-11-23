@@ -137,7 +137,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/lib/letter-shell/src/shell.c|Core|Middlewares|Drivers|src/camera/|src/test/|src/lib/fatfs/|src/lib/log.c/|src/lib/nr_micro_shell/|src/lib/littlefs/bd/|src/lib/littlefs/tests/|src/lib/littlefs/benches/|src/lib/letter-shell/demo/|src/lib/letter-shell/extensions/|src/lib/letter-shell/src/shell_cmd_list.c|src/lib/letter-shell/src/shell_companion.c|src/lib/EasyLogger/easylogger/plugins/|src/lib/EasyLogger/easylogger/port/|src/core/vfs/storage/storage_drv_sd.c|src/platform/bsp/rp2350/|gen/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
+						<entry excluding="Core|Middlewares|Drivers|src/camera/|src/test/|src/lib/fatfs/|src/lib/log.c/|src/lib/nr_micro_shell/|src/lib/littlefs/bd/|src/lib/littlefs/tests/|src/lib/littlefs/benches/|src/lib/letter-shell/demo/|src/lib/letter-shell/extensions/|src/lib/letter-shell/src/shell_cmd_list.c|src/lib/letter-shell/src/shell_companion.c|src/lib/EasyLogger/easylogger/plugins/|src/lib/EasyLogger/easylogger/port/|src/core/vfs/storage/storage_drv_sd.c|src/platform/bsp/rp2350/|gen/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>

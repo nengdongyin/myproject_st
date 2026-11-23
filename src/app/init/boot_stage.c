@@ -29,6 +29,7 @@
 
 #include "log_api.h"  /* 门面: LOG_I/W/E */
 #include "port.h"     /* system_get_time_ms */
+#include "port_rtos.h" /* port_heap_info: 收尾那行堆预算 */
 #include "bsp_uart.h" /* boot_stage_bare 的裸写出口 */
 
 #include <stdarg.h>
@@ -204,6 +205,18 @@ void boot_stage_done(void)
        总耗时直接取 uptime: init 任务是调度器起来后第一个跑的, 所以它就是启动耗时。 */
     boot_stage(0, "===== boot complete in %lu ms =====",
                (unsigned long)system_get_time_ms());
+
+    /* 堆预算: 此刻 init 任务(8KB 栈)仍存活, 所以 min_free 反映的是**含启动峰值**的
+       最低水位 —— 判断 configTOTAL_HEAP_SIZE 能否收紧就看这个数。
+       free 命令能随时查到同样的值, 但产线固件关掉 shell 后只剩这一行。 */
+    port_heap_info_t hp;
+
+    if (port_heap_info(&hp) == 0 && hp.total != 0u)
+    {
+        boot_stage(0, "heap: total %u B, min-free %u B, peak used %u B",
+                   (unsigned)hp.total, (unsigned)hp.min_free,
+                   (unsigned)(hp.total - hp.min_free));
+    }
 }
 
 void boot_stage_bare(const char *msg)

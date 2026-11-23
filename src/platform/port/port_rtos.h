@@ -55,6 +55,30 @@ typedef struct
  */
 int port_thread_stat(size_t idx, port_thread_info_t *out);
 
+/**
+ * @brief 堆快照 (单位字节) —— 供 free 命令与启动收尾使用
+ *
+ * 与 @ref port_thread_stat 同理: 堆尺寸/水位是 RTOS 私有能力 (FreeRTOS 的
+ * xPortGetFreeHeapSize / xPortGetMinimumEverFreeHeapSize), 不能让 core 直接碰。
+ *
+ * @note `min_free` 是**上电以来**的最低可用值, 所以 "峰值占用 = total - min_free"。
+ *       判断 configTOTAL_HEAP_SIZE 能否收紧, 看的就是这一项。
+ */
+typedef struct
+{
+    uint32_t total;    /**< 堆总量; 0 = 后端不提供 */
+    uint32_t free;     /**< 当前可用字节 */
+    uint32_t min_free; /**< 上电以来最低可用字节 (峰值占用的反指标) */
+} port_heap_info_t;
+
+/**
+ * @brief 读取堆快照
+ *
+ * @param out 输出 (不能为 NULL)
+ * @return 0 成功; -ENOTSUP 当前后端不提供; -EINVAL out 为 NULL
+ */
+int port_heap_info(port_heap_info_t *out);
+
 #ifdef __cplusplus
 }
 #endif

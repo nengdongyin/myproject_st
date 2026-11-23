@@ -1,10 +1,11 @@
 /**
  * @file rtos_shell.c
- * @brief RTOS 线程 / 栈用量查询命令 —— ps 与 stacks
+ * @brief RTOS 线程 / 栈 / 堆用量查询命令 —— ps、stacks、free
  *
- * @par 两个命令的分工
+ * @par 三个命令的分工
  *   - `ps`     : 线程全貌 (名字/状态/优先级/栈大小/峰值占用/剩余比例)
  *   - `stacks` : 只看栈, 按**剩余比例升序**排 —— 最危险的排最前, 一眼看溢出风险
+ *   - `free`   : 堆的 total / free / min-free —— 与 stacks 是一对：一个看栈、一个看堆
  *
  * @par 依赖纪律
  * 本文件只 include port_rtos.h + shell_api.h: 它不认识 Zephyr 也不认识 FreeRTOS。
@@ -107,8 +108,15 @@ static int rtos_cmd_ps(void)
         return 0;
     }
 
+    /* 表头必须跟着后端走: 提供栈总大小时该列是"峰值占用"(已用),
+       不提供时只能给"历史最小剩余"(还剩多少) —— 两者语义相反, 用同一行
+       表头写死 usedmax 会让读者把"剩 6816"看成"用了 6816"。 */
+    int have_size = (n > 0u && s_rows[0].stack_size > 0u);
+
     shell_printf("%-12s %-10s %4s %7s %8s %5s\r\n",
-                 "name", "state", "prio", "stack", "usedmax", "free%");
+                 "name", "state", "prio", "stack",
+                 have_size ? "usedmax" : "free_min",
+                 have_size ? "free%" : "-");
     for (size_t i = 0; i < n; i++)
     {
         const port_thread_info_t *t = &s_rows[i];
@@ -124,9 +132,10 @@ static int rtos_cmd_ps(void)
         }
         else
         {
-            /* 后端不提供总大小 (FreeRTOS): 只给"历史最小剩余字节" */
+            /* 后端不提供总大小 (FreeRTOS 的 TaskStatus_t 没有栈总大小):
+               这一列是"历史最小剩余字节", 即还剩多少, 不是用了多少。 */
             shell_printf("%-12s %-10s %4d %7s %8u %5s\r\n", t->name, t->state,
-                         (int)t->prio, "n/a", (unsigned)t->stack_free_min, "n/a");
+                         (int)t->prio, "n/a", (unsigned)t->stack_free_min, "-");
         }
     }
     if (n == 0)
@@ -184,5 +193,35 @@ static int rtos_cmd_stacks(void)
     return 0;
 }
 SHELL_CMD(stacks, rtos_cmd_stacks, stack usage sorted by least free first);
+
+/**
+ * @brief free —— 堆用量 (总量 / 当前可用 / 上电以来最低)
+ *
+ * 与 `stacks` 是一对: stacks 看栈、free 看堆。判断 configTOTAL_HEAP_SIZE
+ * 能不能收紧, 看的是 min-free(上电以来最低) 而不是某一时刻的 free。
+ *
+ * @return 0
+ */
+static int rtos_cmd_free(void)
+{
+    port_heap_info_t hp;
+
+    if (port_heap_info(&hp) != 0 || hp.total == 0u)
+    {
+        rtos_report_unsupported("free");
+        return 0;
+    }
+
+    /* 峰值占用 = 堆总量 - 上电以来最低可用 */
+    uint32_t peak = (hp.min_free <= hp.total) ? (hp.total - hp.min_free) : 0u;
+    unsigned pct  = (unsigned)(((uint64_t)peak * 100u) / hp.total);
+
+    shell_printf("heap  : total %u B, free %u B, min-free %u B\r\n",
+                 (unsigned)hp.total, (unsigned)hp.free, (unsigned)hp.min_free);
+    shell_printf("peak  : %u B used (%u%%), headroom %u B\r\n",
+                 (unsigned)peak, pct, (unsigned)hp.min_free);
+    return 0;
+}
+SHELL_CMD(free, rtos_cmd_free, heap usage: total / free / min-ever-free);
 
 #endif /* !SHELL_BACKEND_NONE */

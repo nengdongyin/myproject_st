@@ -124,12 +124,16 @@
  *   - SHELL_CFG_USER —— letter-shell 自己的 overlay 入口；
  *   - 任何结构体成员顺序 / 枚举值 / 存储记录格式相关的常量。
  *
- *  校验脚本 tools/check_config_overlay.py 会拒绝这些名字。
+ *  校验脚本 tools/check_config_overlay.py 会拒绝这些名字。i m nn.
  * ================================================================ */
 
-#define VFS_ENABLE_LFS            0
-#define SHELL_BACKEND_LETTER 	  0
-#define LOG_BACKEND_EASYLOGGER    0
+#define VFS_ENABLE_LFS            1
+#define SHELL_BACKEND_LETTER 	  1
+#define LOG_BACKEND_EASYLOGGER    1
+/** @brief 启用参数 dump 格式化输出
+ *  1=开 0=关。关闭时 param_dump()/param_dump_entry() 为空操作宏，
+ *  整个 param_dump.c 不参与编译，避免拉入 stdio 库。 */
+#define PARAM_DUMP_ENABLE 1
 /** @brief 选用 FlashDB 后端 (需把 param_storage_flashdb.c 与 flashdb 库编入) */
 #ifndef PARAM_FLASHDB_ENABLE
 #define PARAM_FLASHDB_ENABLE 0
