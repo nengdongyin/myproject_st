@@ -102,7 +102,7 @@ static int appfd_alloc(vfs_fd_t vfd)
  *          RTOS/硬件，故此处仅占位，默认返回 -ENOTSUP（未接控制台）。
  * @return 实际写入字节数；< 0 负 errno（-ENOTSUP 未接控制台）
  */
-__attribute__((weak)) ssize_t vfs_console_write(const void *buf, size_t len)
+__attribute__((weak)) int32_t vfs_console_write(const void *buf, size_t len)
 {
     (void)buf;
     (void)len;
@@ -114,7 +114,7 @@ __attribute__((weak)) ssize_t vfs_console_write(const void *buf, size_t len)
  * @details 平台用弱符号覆盖本函数，从底层 UART/console 读。默认 -ENOTSUP。
  * @return 实际读入字节数；< 0 负 errno（-ENOTSUP 未接控制台）
  */
-__attribute__((weak)) ssize_t vfs_console_read(void *buf, size_t len)
+__attribute__((weak)) int32_t vfs_console_read(void *buf, size_t len)
 {
     (void)buf;
     (void)len;
@@ -196,7 +196,7 @@ _ssize_t _read_r(struct _reent *r, int fd, void *buf, size_t len)
             r->_errno = EBADF;
             return -1;
         }
-        ssize_t n = vfs_console_read(buf, len);
+        int32_t n = vfs_console_read(buf, len);
         if (n < 0)
         {
             r->_errno = -n;
@@ -215,7 +215,7 @@ _ssize_t _read_r(struct _reent *r, int fd, void *buf, size_t len)
     vfs_fd_t vfd = g_fdtable[fd];   /* 锁内快照，锁外 I/O */
     sys_mutex_unlock(g_stdio_lock);
 
-    ssize_t n = vfs_read(vfd, buf, len);
+    int32_t n = vfs_read(vfd, buf, len);
     if (n < 0)
     {
         r->_errno = -n;
@@ -245,7 +245,7 @@ _ssize_t _write_r(struct _reent *r, int fd, const void *buf, size_t len)
             r->_errno = EBADF;
             return -1;
         }
-        ssize_t n = vfs_console_write(buf, len);
+        int32_t n = vfs_console_write(buf, len);
         if (n < 0)
         {
             r->_errno = -n;
@@ -264,7 +264,7 @@ _ssize_t _write_r(struct _reent *r, int fd, const void *buf, size_t len)
     vfs_fd_t vfd = g_fdtable[fd];   /* 锁内快照，锁外 I/O */
     sys_mutex_unlock(g_stdio_lock);
 
-    ssize_t n = vfs_write(vfd, buf, len);
+    int32_t n = vfs_write(vfd, buf, len);
     if (n < 0)
     {
         r->_errno = -n;
@@ -296,7 +296,7 @@ _off_t _lseek_r(struct _reent *r, int fd, _off_t off, int whence)
     vfs_fd_t vfd = g_fdtable[fd];   /* 锁内快照，锁外 I/O */
     sys_mutex_unlock(g_stdio_lock);
 
-    off_t rc = vfs_lseek(vfd, (off_t)off, whence);
+    int32_t rc = vfs_lseek(vfd, (int32_t)off, whence);
     if (rc < 0)
     {
         r->_errno = -rc;
@@ -357,8 +357,8 @@ int _fstat_r(struct _reent *r, int fd, struct stat *st)
     memset(st, 0, sizeof(*st));
     st->st_mode = S_IFREG;
     /* 精确大小：记原偏移 → seek 到末尾取长度 → 恢复偏移 */
-    off_t cur = vfs_tell(vfd);
-    off_t len = vfs_lseek(vfd, 0, VFS_SEEK_END);
+    int32_t cur = vfs_tell(vfd);
+    int32_t len = vfs_lseek(vfd, 0, VFS_SEEK_END);
     if (cur >= 0)
         vfs_lseek(vfd, cur, VFS_SEEK_SET);
     st->st_size = (len >= 0) ? (size_t)len : 0;

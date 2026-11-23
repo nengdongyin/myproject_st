@@ -364,15 +364,15 @@ static void ft_recv_open(const char *peer_name, uint32_t size)
  */
 static void ft_recv_data(const uint8_t *data, uint32_t len)
 {
-    ssize_t written;
+    int32_t written;
 
     ft_lock();
-    written = (g_ft.fd >= 0) ? vfs_write(g_ft.fd, data, len) : (ssize_t)-1;
-    if (written == (ssize_t)len)
+    written = (g_ft.fd >= 0) ? vfs_write(g_ft.fd, data, len) : (int32_t)-1;
+    if (written == (int32_t)len)
         g_ft.transferred += len;
     ft_unlock();
 
-    if (written != (ssize_t)len)
+    if (written != (int32_t)len)
     {
         LOG_E("recv: write failed (want %u, got %d)",
                (unsigned)len, (int)written);
@@ -511,12 +511,12 @@ static void ft_send_file_info(ymodem_protocol_parser_t *yp, ymodem_sender_event_
 /** @brief 收到 DATA_PACKET: 按帧序号偏移读出 1K 数据交给发送器 */
 static void ft_send_data(ymodem_sender_event_t *event)
 {
-    ssize_t actual = 0;
+    int32_t actual = 0;
 
     ft_lock();
     if (g_ft.fd >= 0)
         actual = vfs_pread(g_ft.fd, event->data, YMODEM_STX_DATA_LEN_BYTE,
-                           (off_t)(event->data_seq * YMODEM_STX_DATA_LEN_BYTE));
+                           (int32_t)(event->data_seq * YMODEM_STX_DATA_LEN_BYTE));
     if (actual > 0)
         g_ft.transferred += (uint32_t)actual;
     ft_unlock();

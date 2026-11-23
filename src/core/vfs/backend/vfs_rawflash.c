@@ -205,21 +205,21 @@ static int raw_open(vfs_file_t *f, const char *rel, int flags)
 }
 
 /** @brief 读取（委托核心，只读不越界） */
-static ssize_t raw_read(vfs_file_t *f, void *buf, size_t n)
+static int32_t raw_read(vfs_file_t *f, void *buf, size_t n)
 {
     raw_slot_t *s = (raw_slot_t *)f->priv;
     return s ? rawflash_read(&s->ctx, buf, n) : -EBADF;
 }
 
 /** @brief 写入（委托核心，顺序追加/整区重写） */
-static ssize_t raw_write(vfs_file_t *f, const void *buf, size_t n)
+static int32_t raw_write(vfs_file_t *f, const void *buf, size_t n)
 {
     raw_slot_t *s = (raw_slot_t *)f->priv;
     return s ? rawflash_write(&s->ctx, buf, n) : -EBADF;
 }
 
 /** @brief 移动读游标（委托核心；写模式返回 -ENOTSUP） */
-static off_t raw_lseek(vfs_file_t *f, off_t off, int whence)
+static int32_t raw_lseek(vfs_file_t *f, int32_t off, int whence)
 {
     raw_slot_t *s = (raw_slot_t *)f->priv;
     if (!s)
@@ -234,7 +234,7 @@ static off_t raw_lseek(vfs_file_t *f, off_t off, int whence)
 }
 
 /** @brief 返回当前游标位置 */
-static off_t raw_tell(vfs_file_t *f)
+static int32_t raw_tell(vfs_file_t *f)
 {
     raw_slot_t *s = (raw_slot_t *)f->priv;
     return s ? rawflash_tell(&s->ctx) : -EBADF;
@@ -251,7 +251,7 @@ static int raw_sync(vfs_file_t *f)
  * @brief 截断：仅支持截断到 0（= 擦除整个分区并进入写模式）
  * @return 0 成功；-EBADF 句柄无效，-ENOTSUP len 非 0，< 0 底层擦除失败
  */
-static int raw_truncate(vfs_file_t *f, off_t len)
+static int raw_truncate(vfs_file_t *f, int32_t len)
 {
     raw_slot_t *s = (raw_slot_t *)f->priv;
     if (!s)

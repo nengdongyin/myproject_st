@@ -920,7 +920,7 @@ int vfs_close(vfs_fd_t fd)
     return rc;
 }
 
-ssize_t vfs_read(vfs_fd_t fd, void *buf, size_t n)
+int32_t vfs_read(vfs_fd_t fd, void *buf, size_t n)
 {
     vfs_handle_t *h = handle_get(fd, VFS_KIND_FILE);
     if (!h)
@@ -929,12 +929,12 @@ ssize_t vfs_read(vfs_fd_t fd, void *buf, size_t n)
         return -ENOTSUP;
 
     mp_lock(h->mp);
-    ssize_t rc = h->fs->read(&h->fobj, buf, n);
+    int32_t rc = h->fs->read(&h->fobj, buf, n);
     mp_unlock(h->mp);
     return rc;
 }
 
-ssize_t vfs_write(vfs_fd_t fd, const void *buf, size_t n)
+int32_t vfs_write(vfs_fd_t fd, const void *buf, size_t n)
 {
     vfs_handle_t *h = handle_get(fd, VFS_KIND_FILE);
     if (!h)
@@ -943,12 +943,12 @@ ssize_t vfs_write(vfs_fd_t fd, const void *buf, size_t n)
         return -ENOTSUP;
 
     mp_lock(h->mp);
-    ssize_t rc = h->fs->write(&h->fobj, buf, n);
+    int32_t rc = h->fs->write(&h->fobj, buf, n);
     mp_unlock(h->mp);
     return rc;
 }
 
-off_t vfs_lseek(vfs_fd_t fd, off_t off, int whence)
+int32_t vfs_lseek(vfs_fd_t fd, int32_t off, int whence)
 {
     vfs_handle_t *h = handle_get(fd, VFS_KIND_FILE);
     if (!h)
@@ -957,12 +957,12 @@ off_t vfs_lseek(vfs_fd_t fd, off_t off, int whence)
         return -ENOTSUP;
 
     mp_lock(h->mp);
-    off_t rc = h->fs->lseek(&h->fobj, off, whence);
+    int32_t rc = h->fs->lseek(&h->fobj, off, whence);
     mp_unlock(h->mp);
     return rc;
 }
 
-off_t vfs_tell(vfs_fd_t fd)
+int32_t vfs_tell(vfs_fd_t fd)
 {
     vfs_handle_t *h = handle_get(fd, VFS_KIND_FILE);
     if (!h)
@@ -971,7 +971,7 @@ off_t vfs_tell(vfs_fd_t fd)
         return -ENOTSUP;
 
     mp_lock(h->mp);
-    off_t rc = h->fs->tell(&h->fobj);
+    int32_t rc = h->fs->tell(&h->fobj);
     mp_unlock(h->mp);
     return rc;
 }
@@ -990,7 +990,7 @@ int vfs_sync(vfs_fd_t fd)
     return rc;
 }
 
-ssize_t vfs_pread(vfs_fd_t fd, void *buf, size_t n, off_t off)
+int32_t vfs_pread(vfs_fd_t fd, void *buf, size_t n, int32_t off)
 {
     vfs_handle_t *h = handle_get(fd, VFS_KIND_FILE);
     if (!h)
@@ -999,18 +999,18 @@ ssize_t vfs_pread(vfs_fd_t fd, void *buf, size_t n, off_t off)
         return -ENOTSUP;
 
     mp_lock(h->mp);
-    off_t seek_rc = h->fs->lseek(&h->fobj, off, VFS_SEEK_SET);
+    int32_t seek_rc = h->fs->lseek(&h->fobj, off, VFS_SEEK_SET);
     if (seek_rc < 0)
     {
         mp_unlock(h->mp);
         return seek_rc;
     }
-    ssize_t rc = h->fs->read(&h->fobj, buf, n);
+    int32_t rc = h->fs->read(&h->fobj, buf, n);
     mp_unlock(h->mp);
     return rc;
 }
 
-int vfs_truncate(vfs_fd_t fd, off_t len)
+int vfs_truncate(vfs_fd_t fd, int32_t len)
 {
     vfs_handle_t *h = handle_get(fd, VFS_KIND_FILE);
     if (!h)

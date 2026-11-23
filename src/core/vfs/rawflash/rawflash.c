@@ -220,7 +220,7 @@ int rawflash_open(rawflash_ctx_t *ctx, int mode, int append, int truncate)
     return 0;
 }
 
-ssize_t rawflash_read(rawflash_ctx_t *ctx, void *buf, size_t n)
+int32_t rawflash_read(rawflash_ctx_t *ctx, void *buf, size_t n)
 {
     if (!ctx || (ctx->mode != RAWFLASH_MODE_READ && ctx->mode != RAWFLASH_MODE_RDWR))
         return -EBADF;
@@ -235,10 +235,10 @@ ssize_t rawflash_read(rawflash_ctx_t *ctx, void *buf, size_t n)
     if (rc < 0)
         return rc;
     ctx->cursor += (uint32_t)n;
-    return (ssize_t)n;
+    return (int32_t)n;
 }
 
-ssize_t rawflash_write(rawflash_ctx_t *ctx, const void *buf, size_t n)
+int32_t rawflash_write(rawflash_ctx_t *ctx, const void *buf, size_t n)
 {
     if (!ctx || (ctx->mode != RAWFLASH_MODE_WRITE && ctx->mode != RAWFLASH_MODE_RDWR))
         return -EBADF;
@@ -264,40 +264,40 @@ ssize_t rawflash_write(rawflash_ctx_t *ctx, const void *buf, size_t n)
     if (rc < 0)
         return rc;
     ctx->cursor += (uint32_t)n; /* 写游标累加：支持同一会话多次 write */
-    return (ssize_t)n;
+    return (int32_t)n;
 }
 
-off_t rawflash_lseek(rawflash_ctx_t *ctx, off_t off, int whence)
+int32_t rawflash_lseek(rawflash_ctx_t *ctx, int32_t off, int whence)
 {
     if (!ctx || (ctx->mode != RAWFLASH_MODE_READ && ctx->mode != RAWFLASH_MODE_RDWR))
         return -ENOTSUP; /* 写阶段不支持回改 */
 
-    off_t base;
+    int32_t base;
     switch (whence)
     {
     case RAWFLASH_SEEK_SET:
         base = 0;
         break;
     case RAWFLASH_SEEK_CUR:
-        base = (off_t)ctx->cursor;
+        base = (int32_t)ctx->cursor;
         break;
     case RAWFLASH_SEEK_END:
-        base = (off_t)ctx->rdlen;
+        base = (int32_t)ctx->rdlen;
         break;
     default:
         return -EINVAL;
     }
 
-    off_t np = base + off;
-    if (np < 0 || np > (off_t)ctx->rdlen)
+    int32_t np = base + off;
+    if (np < 0 || np > (int32_t)ctx->rdlen)
         return -EINVAL;
     ctx->cursor = (uint32_t)np;
     return np;
 }
 
-off_t rawflash_tell(const rawflash_ctx_t *ctx)
+int32_t rawflash_tell(const rawflash_ctx_t *ctx)
 {
-    return ctx ? (off_t)ctx->cursor : -EBADF;
+    return ctx ? (int32_t)ctx->cursor : -EBADF;
 }
 
 int rawflash_sync(rawflash_ctx_t *ctx)

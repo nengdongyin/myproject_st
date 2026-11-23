@@ -38,7 +38,7 @@ static int write_all_and_close(const void *buf, size_t n)
 {
     if (reopen(RAWFLASH_MODE_WRITE, 0, 0) != 0)
         return -1;
-    if (rawflash_write(&g_ctx, buf, n) != (ssize_t)n)
+    if (rawflash_write(&g_ctx, buf, n) != (int32_t)n)
         return -1;
     return rawflash_close(&g_ctx);
 }

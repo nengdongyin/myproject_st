@@ -55,7 +55,7 @@ static int mock_open(vfs_file_t *f, const char *rel, int flags)
     return 0;
 }
 
-static ssize_t mock_read(vfs_file_t *f, void *buf, size_t n)
+static int32_t mock_read(vfs_file_t *f, void *buf, size_t n)
 {
     mock_handle_t *h = (mock_handle_t *)f->priv;
     if (!h)
@@ -65,10 +65,10 @@ static ssize_t mock_read(vfs_file_t *f, void *buf, size_t n)
         n = avail;
     memcpy(buf, g_data + h->cursor, n);
     h->cursor += (int)n;
-    return (ssize_t)n;
+    return (int32_t)n;
 }
 
-static ssize_t mock_write(vfs_file_t *f, const void *buf, size_t n)
+static int32_t mock_write(vfs_file_t *f, const void *buf, size_t n)
 {
     mock_handle_t *h = (mock_handle_t *)f->priv;
     if (!h)
@@ -82,31 +82,31 @@ static ssize_t mock_write(vfs_file_t *f, const void *buf, size_t n)
     h->cursor += (int)n;
     if (h->cursor > g_len)
         g_len = h->cursor;
-    return (ssize_t)n;
+    return (int32_t)n;
 }
 
-static off_t mock_lseek(vfs_file_t *f, off_t off, int whence)
+static int32_t mock_lseek(vfs_file_t *f, int32_t off, int whence)
 {
     mock_handle_t *h = (mock_handle_t *)f->priv;
     if (!h)
         return -EBADF;
-    off_t base = (whence == VFS_SEEK_SET) ? 0
-               : (whence == VFS_SEEK_CUR) ? (off_t)h->cursor
-               : (whence == VFS_SEEK_END) ? (off_t)g_len
+    int32_t base = (whence == VFS_SEEK_SET) ? 0
+               : (whence == VFS_SEEK_CUR) ? (int32_t)h->cursor
+               : (whence == VFS_SEEK_END) ? (int32_t)g_len
                                           : -1;
     if (base < 0)
         return -EINVAL;
-    off_t np = base + off;
+    int32_t np = base + off;
     if (np < 0)
         return -EINVAL;
     h->cursor = (int)np;
     return np;
 }
 
-static off_t mock_tell(vfs_file_t *f)
+static int32_t mock_tell(vfs_file_t *f)
 {
     mock_handle_t *h = (mock_handle_t *)f->priv;
-    return h ? (off_t)h->cursor : -EBADF;
+    return h ? (int32_t)h->cursor : -EBADF;
 }
 
 static int mock_close(vfs_file_t *f)
@@ -132,7 +132,7 @@ static int mock_unlink(vfs_mount_t *mp, const char *rel)
     return 0;
 }
 
-static int mock_truncate(vfs_file_t *f, off_t len)
+static int mock_truncate(vfs_file_t *f, int32_t len)
 {
     mock_handle_t *h = (mock_handle_t *)f->priv;
     if (!h)

@@ -41,7 +41,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <sys/types.h> /* off_t / ssize_t */
 #include "vfs_bdev.h"
 
 #ifdef __cplusplus
@@ -125,22 +124,22 @@ extern "C"
      * @brief 从当前游标读取（不越过有效长度）
      * @return >= 0 读取字节数（0=EOF）；< 0 负 errno
      */
-    ssize_t rawflash_read(rawflash_ctx_t *ctx, void *buf, size_t n);
+    int32_t rawflash_read(rawflash_ctx_t *ctx, void *buf, size_t n);
 
     /**
      * @brief 从当前写游标顺序写入
      * @return >= 0 写入字节数；< 0 负 errno（-ENOSPC 超容量 / -EBADF 非写模式）
      */
-    ssize_t rawflash_write(rawflash_ctx_t *ctx, const void *buf, size_t n);
+    int32_t rawflash_write(rawflash_ctx_t *ctx, const void *buf, size_t n);
 
     /**
      * @brief 只读/RDWR 模式下移动读游标
      * @return >= 0 新绝对偏移；< 0 负 errno（-ENOTSUP 写模式 / -EINVAL 越界）
      */
-    off_t rawflash_lseek(rawflash_ctx_t *ctx, off_t off, int whence);
+    int32_t rawflash_lseek(rawflash_ctx_t *ctx, int32_t off, int whence);
 
     /** @brief 返回当前游标位置（句柄无效返回 -EBADF） */
-    off_t rawflash_tell(const rawflash_ctx_t *ctx);
+    int32_t rawflash_tell(const rawflash_ctx_t *ctx);
 
     /** @brief 刷缓存：直接写 flash，无缓存，恒返回 0 */
     int rawflash_sync(rawflash_ctx_t *ctx);

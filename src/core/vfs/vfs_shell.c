@@ -478,7 +478,7 @@ static int vfs_sh_cat(int argc, char *argv[])
     }
 
     /* ---- 定窗口 [off, off+want): 文件长度用 SEEK_END 取, 尾部模式反推起点 ---- */
-    const off_t end = vfs_lseek(fd, 0, VFS_SEEK_END);
+    const int32_t end = vfs_lseek(fd, 0, VFS_SEEK_END);
     if (end < 0)
     {
         shell_printf("cat: %s\r\n", vfs_sh_err_name((int)end));
@@ -516,7 +516,7 @@ static int vfs_sh_cat(int argc, char *argv[])
 
     /* 定位到窗口起点 —— 必须无条件做: 上面 SEEK_END 取长度已把偏移停在文件尾,
        off==0 时若跳过这一步就会从 EOF 开始读 (什么都不打印) */
-    if (vfs_lseek(fd, (off_t)off, VFS_SEEK_SET) < 0)
+    if (vfs_lseek(fd, (int32_t)off, VFS_SEEK_SET) < 0)
     {
         shell_printf("cat: seek failed\r\n");
         (void)vfs_close(fd);
@@ -529,7 +529,7 @@ static int vfs_sh_cat(int argc, char *argv[])
         if (chunk > sizeof(buf))
             chunk = sizeof(buf);
 
-        ssize_t n = vfs_read(fd, buf, chunk);
+        int32_t n = vfs_read(fd, buf, chunk);
         if (n < 0)
         {
             shell_printf("cat: %s\r\n", vfs_sh_err_name((int)n));
@@ -538,7 +538,7 @@ static int vfs_sh_cat(int argc, char *argv[])
         if (n == 0)
             break;
 
-        for (ssize_t i = 0; i < n; i++)
+        for (int32_t i = 0; i < n; i++)
         {
             char c = (char)buf[i];
             if (c == '\r')
@@ -615,7 +615,7 @@ static int vfs_sh_hexdump(int argc, char *argv[])
         return -1;
     }
 
-    if (off > 0 && vfs_lseek(fd, (off_t)off, VFS_SEEK_SET) < 0)
+    if (off > 0 && vfs_lseek(fd, (int32_t)off, VFS_SEEK_SET) < 0)
     {
         shell_printf("hexdump: seek failed\r\n");
         (void)vfs_close(fd);
@@ -628,7 +628,7 @@ static int vfs_sh_hexdump(int argc, char *argv[])
         if (want > sizeof(buf))
             want = sizeof(buf);
 
-        ssize_t n = vfs_read(fd, buf, want);
+        int32_t n = vfs_read(fd, buf, want);
         if (n < 0)
         {
             shell_printf("hexdump: %s\r\n", vfs_sh_err_name((int)n));
@@ -638,7 +638,7 @@ static int vfs_sh_hexdump(int argc, char *argv[])
             break;
 
         shell_printf("%08x  ", (unsigned)(off + done));
-        for (ssize_t i = 0; i < (ssize_t)sizeof(buf); i++)
+        for (int32_t i = 0; i < (int32_t)sizeof(buf); i++)
         {
             if (i < n)
                 shell_printf("%02x ", buf[i]);
@@ -646,7 +646,7 @@ static int vfs_sh_hexdump(int argc, char *argv[])
                 shell_printf("   ");
         }
         shell_printf(" |");
-        for (ssize_t i = 0; i < n; i++)
+        for (int32_t i = 0; i < n; i++)
         {
             char c = (char)buf[i];
             shell_printf("%c", (c >= 0x20 && c <= 0x7e) ? c : '.');

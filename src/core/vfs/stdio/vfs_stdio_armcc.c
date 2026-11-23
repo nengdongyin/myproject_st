@@ -104,7 +104,7 @@ static int appfd_alloc(vfs_fd_t vfd)
  * ================================================================ */
 
 /** @brief 控制台输出钩子（fd 1=stdout、fd 2=stderr）；平台覆盖写到底层 UART */
-__weak ssize_t vfs_console_write(const void *buf, size_t len)
+__weak int32_t vfs_console_write(const void *buf, size_t len)
 {
     (void)buf;
     (void)len;
@@ -112,7 +112,7 @@ __weak ssize_t vfs_console_write(const void *buf, size_t len)
 }
 
 /** @brief 控制台输入钩子（fd 0=stdin）；平台覆盖从底层 UART 读 */
-__weak ssize_t vfs_console_read(void *buf, size_t len)
+__weak int32_t vfs_console_read(void *buf, size_t len)
 {
     (void)buf;
     (void)len;
@@ -176,8 +176,8 @@ int _sys_write(FILEHANDLE fh, const unsigned char *buf, unsigned len, int mode)
     {
         if (fh == 0)
             return -1;
-        ssize_t n = vfs_console_write(buf, len);
-        return (n == (ssize_t)len) ? 0 : -1;
+        int32_t n = vfs_console_write(buf, len);
+        return (n == (int32_t)len) ? 0 : -1;
     }
 
     sys_mutex_lock(g_stdio_lock);
@@ -189,8 +189,8 @@ int _sys_write(FILEHANDLE fh, const unsigned char *buf, unsigned len, int mode)
     vfs_fd_t vfd = g_fdtable[fh];   /* 锁内快照，锁外 I/O */
     sys_mutex_unlock(g_stdio_lock);
 
-    ssize_t n = vfs_write(vfd, buf, len);
-    return (n == (ssize_t)len) ? 0 : -1; /* ARMCC: 0=全部成功 */
+    int32_t n = vfs_write(vfd, buf, len);
+    return (n == (int32_t)len) ? 0 : -1; /* ARMCC: 0=全部成功 */
 }
 
 /**
@@ -207,8 +207,8 @@ int _sys_read(FILEHANDLE fh, unsigned char *buf, unsigned len, int mode)
     {
         if (fh != 0)
             return -1;
-        ssize_t n = vfs_console_read(buf, len);
-        return (n == (ssize_t)len) ? 0 : -1;
+        int32_t n = vfs_console_read(buf, len);
+        return (n == (int32_t)len) ? 0 : -1;
     }
 
     sys_mutex_lock(g_stdio_lock);
@@ -220,8 +220,8 @@ int _sys_read(FILEHANDLE fh, unsigned char *buf, unsigned len, int mode)
     vfs_fd_t vfd = g_fdtable[fh];   /* 锁内快照，锁外 I/O */
     sys_mutex_unlock(g_stdio_lock);
 
-    ssize_t n = vfs_read(vfd, buf, len);
-    return (n == (ssize_t)len) ? 0 : -1;
+    int32_t n = vfs_read(vfd, buf, len);
+    return (n == (int32_t)len) ? 0 : -1;
 }
 
 /**
@@ -241,7 +241,7 @@ int _sys_seek(FILEHANDLE fh, long pos)
     vfs_fd_t vfd = g_fdtable[fh];   /* 锁内快照，锁外 I/O */
     sys_mutex_unlock(g_stdio_lock);
 
-    off_t rc = vfs_lseek(vfd, (off_t)pos, VFS_SEEK_SET);
+    int32_t rc = vfs_lseek(vfd, (int32_t)pos, VFS_SEEK_SET);
     return (rc < 0) ? -1 : 0;
 }
 
@@ -269,8 +269,8 @@ long _sys_flen(FILEHANDLE fh)
     sys_mutex_unlock(g_stdio_lock);
 
     /* 求长度：记原偏移 → seek 末尾 → 恢复原偏移（保持连续读不受影响） */
-    off_t cur = vfs_tell(vfd);
-    off_t end = vfs_lseek(vfd, 0, VFS_SEEK_END);
+    int32_t cur = vfs_tell(vfd);
+    int32_t end = vfs_lseek(vfd, 0, VFS_SEEK_END);
     if (end < 0)
         return -1;
     if (cur >= 0)

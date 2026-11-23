@@ -391,18 +391,18 @@ static int fat_vfs_open(vfs_file_t *f, const char *rel, int flags)
 }
 
 /** @brief 读取 FatFs 文件：返回实际字节数，< 0 负 errno */
-static ssize_t fat_vfs_read(vfs_file_t *f, void *buf, size_t n)
+static int32_t fat_vfs_read(vfs_file_t *f, void *buf, size_t n)
 {
     fat_file_t *s = (fat_file_t *)f->priv;
     if (!s)
         return -EBADF;
     UINT br = 0;
     FRESULT fr = f_read(&s->fil, buf, (UINT)n, &br);
-    return (fr != FR_OK) ? -EIO : (ssize_t)br;
+    return (fr != FR_OK) ? -EIO : (int32_t)br;
 }
 
 /** @brief 写入 FatFs 文件：写不满视为 -ENOSPC，< 0 负 errno */
-static ssize_t fat_vfs_write(vfs_file_t *f, const void *buf, size_t n)
+static int32_t fat_vfs_write(vfs_file_t *f, const void *buf, size_t n)
 {
     fat_file_t *s = (fat_file_t *)f->priv;
     if (!s)
@@ -411,11 +411,11 @@ static ssize_t fat_vfs_write(vfs_file_t *f, const void *buf, size_t n)
     FRESULT fr = f_write(&s->fil, buf, (UINT)n, &bw);
     if (fr != FR_OK)
         return -EIO;
-    return (bw == (UINT)n) ? (ssize_t)bw : -ENOSPC;
+    return (bw == (UINT)n) ? (int32_t)bw : -ENOSPC;
 }
 
 /** @brief 移动 FatFs 文件偏移：按 whence 求 base 后 f_lseek */
-static off_t fat_vfs_lseek(vfs_file_t *f, off_t off, int whence)
+static int32_t fat_vfs_lseek(vfs_file_t *f, int32_t off, int whence)
 {
     fat_file_t *s = (fat_file_t *)f->priv;
     if (!s)
@@ -431,19 +431,19 @@ static off_t fat_vfs_lseek(vfs_file_t *f, off_t off, int whence)
     else
         return -EINVAL;
 
-    off_t np = (off_t)base + off;
+    int32_t np = (int32_t)base + off;
     if (np < 0)
         return -EINVAL;
 
     FRESULT fr = f_lseek(&s->fil, (FSIZE_t)np);
-    return (fr != FR_OK) ? -EIO : (off_t)f_tell(&s->fil);
+    return (fr != FR_OK) ? -EIO : (int32_t)f_tell(&s->fil);
 }
 
 /** @brief 返回 FatFs 文件当前读写指针 */
-static off_t fat_vfs_tell(vfs_file_t *f)
+static int32_t fat_vfs_tell(vfs_file_t *f)
 {
     fat_file_t *s = (fat_file_t *)f->priv;
-    return s ? (off_t)f_tell(&s->fil) : -EBADF;
+    return s ? (int32_t)f_tell(&s->fil) : -EBADF;
 }
 
 /** @brief 同步 FatFs 文件（f_sync 落盘） */
@@ -454,7 +454,7 @@ static int fat_vfs_sync(vfs_file_t *f)
 }
 
 /** @brief 截断 FatFs 文件：先 lseek 到 len 再 f_truncate */
-static int fat_vfs_truncate(vfs_file_t *f, off_t len)
+static int fat_vfs_truncate(vfs_file_t *f, int32_t len)
 {
     fat_file_t *s = (fat_file_t *)f->priv;
     if (!s)

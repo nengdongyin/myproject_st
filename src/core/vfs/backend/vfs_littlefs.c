@@ -374,29 +374,29 @@ static int lfs_vfs_open(vfs_file_t *f, const char *rel, int flags)
 }
 
 /** @brief 读取 littlefs 文件：返回实际字节数，< 0 负 errno */
-static ssize_t lfs_vfs_read(vfs_file_t *f, void *buf, size_t n)
+static int32_t lfs_vfs_read(vfs_file_t *f, void *buf, size_t n)
 {
     lfs_file_slot_t *s = (lfs_file_slot_t *)f->priv;
     lfs_mnt_t *m = (lfs_mnt_t *)f->mp->fs_ctx;
     if (!s || !m)
         return -EBADF;
     lfs_ssize_t rc = lfs_file_read(&m->lfs, &s->file, buf, n);
-    return (rc < 0) ? lfs_to_errno((int)rc) : (ssize_t)rc;
+    return (rc < 0) ? lfs_to_errno((int)rc) : (int32_t)rc;
 }
 
 /** @brief 写入 littlefs 文件：返回实际字节数，< 0 负 errno */
-static ssize_t lfs_vfs_write(vfs_file_t *f, const void *buf, size_t n)
+static int32_t lfs_vfs_write(vfs_file_t *f, const void *buf, size_t n)
 {
     lfs_file_slot_t *s = (lfs_file_slot_t *)f->priv;
     lfs_mnt_t *m = (lfs_mnt_t *)f->mp->fs_ctx;
     if (!s || !m)
         return -EBADF;
     lfs_ssize_t rc = lfs_file_write(&m->lfs, &s->file, buf, n);
-    return (rc < 0) ? lfs_to_errno((int)rc) : (ssize_t)rc;
+    return (rc < 0) ? lfs_to_errno((int)rc) : (int32_t)rc;
 }
 
 /** @brief 移动 littlefs 文件偏移：映射 whence 后返回新绝对偏移 */
-static off_t lfs_vfs_lseek(vfs_file_t *f, off_t off, int whence)
+static int32_t lfs_vfs_lseek(vfs_file_t *f, int32_t off, int whence)
 {
     lfs_file_slot_t *s = (lfs_file_slot_t *)f->priv;
     lfs_mnt_t *m = (lfs_mnt_t *)f->mp->fs_ctx;
@@ -414,18 +414,18 @@ static off_t lfs_vfs_lseek(vfs_file_t *f, off_t off, int whence)
         return -EINVAL;
 
     lfs_soff_t rc = lfs_file_seek(&m->lfs, &s->file, off, w);
-    return (rc < 0) ? lfs_to_errno((int)rc) : (off_t)rc;
+    return (rc < 0) ? lfs_to_errno((int)rc) : (int32_t)rc;
 }
 
 /** @brief 返回 littlefs 文件当前偏移 */
-static off_t lfs_vfs_tell(vfs_file_t *f)
+static int32_t lfs_vfs_tell(vfs_file_t *f)
 {
     lfs_file_slot_t *s = (lfs_file_slot_t *)f->priv;
     lfs_mnt_t *m = (lfs_mnt_t *)f->mp->fs_ctx;
     if (!s || !m)
         return -EBADF;
     lfs_soff_t rc = lfs_file_tell(&m->lfs, &s->file);
-    return (rc < 0) ? lfs_to_errno((int)rc) : (off_t)rc;
+    return (rc < 0) ? lfs_to_errno((int)rc) : (int32_t)rc;
 }
 
 /** @brief 同步 littlefs 文件缓存到介质 */
@@ -439,7 +439,7 @@ static int lfs_vfs_sync(vfs_file_t *f)
 }
 
 /** @brief 截断/扩展 littlefs 文件到 len 字节 */
-static int lfs_vfs_truncate(vfs_file_t *f, off_t len)
+static int lfs_vfs_truncate(vfs_file_t *f, int32_t len)
 {
     lfs_file_slot_t *s = (lfs_file_slot_t *)f->priv;
     lfs_mnt_t *m = (lfs_mnt_t *)f->mp->fs_ctx;

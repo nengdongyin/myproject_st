@@ -149,4 +149,14 @@
 #define PARAM_MKV_ENABLE 1
 #endif
 
+/* ================================================================
+ *  工具链兼容垫片（不是配置项，不参与覆盖规则）
+ *
+ *  本工程用「负 errno」做返回码契约，而 ARM C 库（armcc / armclang）不保证
+ *  ENOENT / ENOTSUP / EROFS 这一族 POSIX 宏存在。放在这里的唯一原因是：
+ *  config.h 是全工程唯一被强制预包含的头，一次引入即可覆盖所有编译单元。
+ *  详见 src/platform/port/port_errno.h。
+ * ================================================================ */
+#include "platform/port/port_errno.h"
+
 #endif /* PROJECT_CONFIG_H */

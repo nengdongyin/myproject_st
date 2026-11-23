@@ -49,9 +49,11 @@
 #ifndef VFS_H
 #define VFS_H
 
+/* 类型约定：文件偏移与读写字节数统一用 int32_t（语义等价 newlib 的
+ * off_t / ssize_t）。刻意不 include POSIX <sys/types.h> —— ARM C 库
+ * （armcc / Keil MDK）不提供该头，一旦 include 整个工程在 Keil 下编不过。 */
 #include <stdint.h>
 #include <stddef.h>
-#include <sys/types.h> /* off_t, ssize_t */
 #include "vfs_config.h"
 #include "vfs_bdev.h"
 
@@ -247,19 +249,19 @@ extern "C"
          * @brief 从当前文件偏移读取数据
          * @return 实际读取字节数（0 表示 EOF）；< 0 负 errno
          */
-        ssize_t (*read)(vfs_file_t *f, void *buf, size_t n);
+        int32_t (*read)(vfs_file_t *f, void *buf, size_t n);
         /**
          * @brief 从当前文件偏移写入数据
          * @return 实际写入字节数；< 0 负 errno（-ENOSPC 空间不足）
          */
-        ssize_t (*write)(vfs_file_t *f, const void *buf, size_t n);
+        int32_t (*write)(vfs_file_t *f, const void *buf, size_t n);
         /**
          * @brief 移动文件偏移
          * @param off    目标偏移（相对 whence）
          * @param whence VFS_SEEK_SET/CUR/END
          * @return 新的绝对偏移；< 0 负 errno
          */
-        off_t (*lseek)(vfs_file_t *f, off_t off, int whence);
+        int32_t (*lseek)(vfs_file_t *f, int32_t off, int whence);
         /**
          * @brief 关闭文件，释放 f->priv 指向的后端私有句柄
          * @return 0 成功；< 0 负 errno
@@ -267,9 +269,9 @@ extern "C"
         int (*close)(vfs_file_t *f);
 
         /* ---- 文件操作（可选） ---- */
-        off_t (*tell)(vfs_file_t *f);            /**< 返回当前偏移；< 0 负 errno */
+        int32_t (*tell)(vfs_file_t *f);          /**< 返回当前偏移；< 0 负 errno */
         int (*sync)(vfs_file_t *f);              /**< 刷缓存；无缓存后端可直接返回 0 */
-        int (*truncate)(vfs_file_t *f, off_t len);/**< 截断/扩展到 len；< 0 负 errno */
+        int (*truncate)(vfs_file_t *f, int32_t len);/**< 截断/扩展到 len；< 0 负 errno */
 
         /* ---- 文件系统级（stat/unlink 必需） ---- */
         /**
@@ -443,7 +445,7 @@ extern "C"
      * @param n   期望读取字节数
      * @return >= 0 实际读取字节数（0 表示 EOF）；< 0 负 errno
      */
-    ssize_t vfs_read(vfs_fd_t fd, void *buf, size_t n);
+    int32_t vfs_read(vfs_fd_t fd, void *buf, size_t n);
 
     /**
      * @brief 写入：返回写入字节数，< 0 为错误
@@ -452,7 +454,7 @@ extern "C"
      * @param n   期望写入字节数
      * @return >= 0 实际写入字节数；< 0 负 errno
      */
-    ssize_t vfs_write(vfs_fd_t fd, const void *buf, size_t n);
+    int32_t vfs_write(vfs_fd_t fd, const void *buf, size_t n);
 
     /**
      * @brief 移动文件偏移
@@ -461,14 +463,14 @@ extern "C"
      * @param whence VFS_SEEK_SET/CUR/END
      * @return >= 0 新的绝对偏移；< 0 负 errno
      */
-    off_t vfs_lseek(vfs_fd_t fd, off_t off, int whence);
+    int32_t vfs_lseek(vfs_fd_t fd, int32_t off, int whence);
 
     /**
      * @brief 获取当前文件偏移
      * @param fd 文件描述符
      * @return >= 0 当前偏移；< 0 负 errno（后端无 tell 时 -ENOTSUP）
      */
-    off_t vfs_tell(vfs_fd_t fd);
+    int32_t vfs_tell(vfs_fd_t fd);
 
     /**
      * @brief 刷缓存（把未落盘数据写回介质）
@@ -481,7 +483,7 @@ extern "C"
      * @brief 定位读（等价 lseek(fd,off,SEEK_SET)+read）
      * @note 与 POSIX pread 语义不同：**会改变文件当前偏移**。连续按偏移读时请递增 off。
      */
-    ssize_t vfs_pread(vfs_fd_t fd, void *buf, size_t n, off_t off);
+    int32_t vfs_pread(vfs_fd_t fd, void *buf, size_t n, int32_t off);
 
     /**
      * @brief 截断/扩展打开的文件到 len 字节（对齐 POSIX ftruncate）
@@ -492,7 +494,7 @@ extern "C"
      * @param len 目标长度（字节）
      * @return 0 成功；< 0 负 errno
      */
-    int vfs_truncate(vfs_fd_t fd, off_t len);
+    int vfs_truncate(vfs_fd_t fd, int32_t len);
 
 /* ================================================================
  *  文件系统级操作
